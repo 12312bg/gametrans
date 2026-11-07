@@ -1,5 +1,6 @@
 import { Checkbox, Empty, Pagination, Spin } from 'antd';
 import { useEffect, useRef } from 'react';
+import { Trans } from 'react-i18next';
 import type { Entry } from '../../../api/types';
 import { StageDot } from '../../../components/Tags';
 import { useT } from '../../../i18n';
@@ -40,7 +41,9 @@ export function EntryList(p: Props) {
   return (
     <div className="editor-list">
       <div className="list-head">
-        <span>{t('editor.total', { count: p.total?.toLocaleString() ?? '-' })}</span>
+        <span>
+          <Trans i18nKey="editor.total" values={{ count: p.total?.toLocaleString() ?? '-' }} components={{ b: <b /> }} />
+        </span>
         {p.fetching && <Spin size="small" />}
       </div>
       <div className="list-scroll">

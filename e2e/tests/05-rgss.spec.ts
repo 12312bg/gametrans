@@ -68,7 +68,7 @@ test('VX Ace：放出脚本文本并翻译，对话增加行数，导出后可�
   await useAs(page, owner);
   // 脚本字符串默认隐藏
   await openEditor(page, acePid, `stage=HIDDEN&category=script&q=${encodeURIComponent('購入する')}`);
-  await expect(page.locator('.entry-context')).toContainText('脚本 #0「Vocab」· 第6行');
+  await expect(page.locator('.entry-context')).toContainText('脚本 #0「Vocab」 · 第6行');
   await page.locator('.entry-actions').getByRole('button', { name: 'more' }).click();
   await page.getByRole('menuitem', { name: /取消隐藏/ }).click();
   await expect(stageTag(page)).toHaveText('未翻译');

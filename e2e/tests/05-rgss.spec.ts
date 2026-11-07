@@ -1,7 +1,7 @@
 import { extractEntries } from '@gametrans/rpgmaker';
 import { unzipSync, zipSync } from 'fflate';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   FIX,
@@ -39,8 +39,10 @@ test.beforeAll(async () => {
   acePid = (await seedProject(owner, { engine: 'RMVXACE', files: [] })).id;
 });
 
-test('VX Ace：选择游戏文件夹上传，自动过滤非数据文件', async ({ page }, info) => {
-  const dir = info.outputPath('ace-game');
+test('VX Ace：选择游戏文件夹上传，自动过滤非数据文件', async ({ page }) => {
+  // 注意：用例输出目录名含中文，Chromium 对非 ASCII 路径的目录上传会卡住，因此放在 ASCII 路径下
+  const dir = join(__dirname, '../.tmp/fixtures', `ace-game-${Date.now()}`);
+  rmSync(dir, { recursive: true, force: true });
   mkdirSync(join(dir, 'Game/Data'), { recursive: true });
   mkdirSync(join(dir, 'Game/Graphics/Pictures'), { recursive: true });
   for (const n of ['Map001', 'Scripts', 'System', 'Actors', 'CommonEvents']) {

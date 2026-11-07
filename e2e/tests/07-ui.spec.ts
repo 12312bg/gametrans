@@ -16,7 +16,7 @@ test('深色模式切换并在刷新后保持', async ({ page }) => {
 
 test('404 页面与不存在的项目', async ({ page }) => {
   await page.goto('/no/such/page');
-  await expect(page.getByText('页面不存在')).toBeVisible();
+  await expect(page.getByText('页面不存在', { exact: true })).toBeVisible();
   await btn(page, '返回首页').click();
   await expect(page).toHaveURL('/');
   await page.goto('/projects/not-a-real-id');

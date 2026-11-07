@@ -7,6 +7,7 @@ import type { Invitation } from '../api/types';
 import { useAuth } from '../auth';
 import { EngineTag, LangPair, RoleTag, UserAvatar } from '../components/Tags';
 import { errorMessage, formatTime, fromNow } from '../utils';
+import TokensTab from './TokensTab';
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();
@@ -138,6 +139,7 @@ export default function ProfilePage() {
                 </Form>
               ),
             },
+            { key: 'tokens', label: 'API 令牌', children: <TokensTab /> },
             {
               key: 'password',
               label: '修改密码',

@@ -44,6 +44,11 @@ enum RequestStatus {
   CANCELED
 }
 
+enum TokenScope {
+  READ
+  WRITE
+}
+
 enum JobType {
   PARSE
   EXPORT
@@ -68,18 +73,19 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships        ProjectMember[]
-  ownedProjects      Project[]       @relation("ProjectOwner")
-  joinRequests       JoinRequest[]   @relation("JoinRequestUser")
-  handledRequests    JoinRequest[]   @relation("JoinRequestHandler")
-  invitations        Invitation[]    @relation("InvitationInvitee")
-  sentInvitations    Invitation[]    @relation("InvitationInviter")
-  history            EntryHistory[]
-  translatedEntries  Entry[]         @relation("EntryTranslator")
-  reviewedEntries    Entry[]         @relation("EntryReviewer")
-  terms              Term[]
-  jobs               Job[]
-  activities         Activity[]
+  memberships       ProjectMember[]
+  ownedProjects     Project[]       @relation("ProjectOwner")
+  joinRequests      JoinRequest[]   @relation("JoinRequestUser")
+  handledRequests   JoinRequest[]   @relation("JoinRequestHandler")
+  invitations       Invitation[]    @relation("InvitationInvitee")
+  sentInvitations   Invitation[]    @relation("InvitationInviter")
+  history           EntryHistory[]
+  translatedEntries Entry[]         @relation("EntryTranslator")
+  reviewedEntries   Entry[]         @relation("EntryReviewer")
+  terms             Term[]
+  jobs              Job[]
+  activities        Activity[]
+  apiTokens         ApiToken[]
 }
 
 model Project {
@@ -104,6 +110,7 @@ model Project {
   jobs         Job[]
   activities   Activity[]
   history      EntryHistory[]
+  apiTokens    ApiToken[]
 
   @@index([visibility, updatedAt])
 }
@@ -158,18 +165,18 @@ model Invitation {
 }
 
 model File {
-  id          String   @id @default(cuid())
-  projectId   String
+  id         String   @id @default(cuid())
+  projectId  String
   /// 相对游戏根目录的路径，如 data/Map001.json、Data/Map001.rvdata2
-  path        String
-  kind        String
-  format      String
-  storageKey  String
-  size        Int
-  sha256      String
-  warnings    String[] @default([])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  path       String
+  kind       String
+  format     String
+  storageKey String
+  size       Int
+  sha256     String
+  warnings   String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   entries Entry[]
@@ -178,22 +185,22 @@ model File {
 }
 
 model Entry {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   projectId    String
   fileId       String
   key          String
   original     String
-  translation  String    @default("")
-  context      String    @default("")
+  translation  String   @default("")
+  context      String   @default("")
   category     String
-  danger       Boolean   @default(false)
-  stage        Stage     @default(UNTRANSLATED)
+  danger       Boolean  @default(false)
+  stage        Stage    @default(UNTRANSLATED)
   sortOrder    Int
-  version      Int       @default(0)
+  version      Int      @default(0)
   translatorId String?
   reviewerId   String?
-  updatedAt    DateTime  @default(now())
-  createdAt    DateTime  @default(now())
+  updatedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file       File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -279,4 +286,26 @@ model Activity {
   user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+}
+
+/// 个人 API 令牌：Authorization: Bearer gt_xxx。只保存哈希，明文仅在创建时返回一次
+model ApiToken {
+  id         String     @id @default(cuid())
+  userId     String
+  name       String
+  /// 令牌明文的 SHA-256
+  tokenHash  String     @unique
+  /// 明文前缀，用于在列表中辨认（如 gt_ab12cd）
+  prefix     String
+  scope      TokenScope
+  /// 非空时仅能访问该项目
+  projectId  String?
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

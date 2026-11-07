@@ -207,3 +207,18 @@ export interface SiteConfig {
   allowRegistration: boolean;
   projectCreation: 'everyone' | 'superadmin';
 }
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  prefix: string;
+  scope: 'READ' | 'WRITE';
+  expiresAt: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  project: { id: string; name: string } | null;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}

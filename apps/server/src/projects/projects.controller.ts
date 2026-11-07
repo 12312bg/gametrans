@@ -13,6 +13,7 @@ import {
 import { ENGINES, Engine, LANGUAGES, PERMISSIONS, ROLE_PERMISSIONS, STAGES, Stage, can } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AccessService } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
@@ -20,6 +21,7 @@ import { escapeLike, pageParams } from '../common/pagination';
 import { StorageService } from '../common/storage.service';
 import { config } from '../config';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectModel, ProjectDetailModel } from '../common/api.models';
 
 const LANG_CODES = LANGUAGES.map((l) => l.code);
 
@@ -50,6 +52,7 @@ export function emptyCounts(): StageCounts {
   return Object.fromEntries(STAGES.map((s) => [s, 0])) as StageCounts;
 }
 
+@ApiTags('项目')
 @Controller('projects')
 export class ProjectsController {
   constructor(
@@ -76,6 +79,12 @@ export class ProjectsController {
     return map;
   }
 
+  @ApiOperation({ summary: '项目列表', description: 'scope=public 公开项目（无需登录）；mine 我参与的；all 全部（仅超级管理员）。' })
+  @ApiQuery({ name: 'pageSize', required: false, description: '每页条数' })
+  @ApiQuery({ name: 'page', required: false, description: '页码，从 1 开始' })
+  @ApiQuery({ name: 'engine', required: false, description: '按引擎筛选', enum: ['RMXP', 'RMVX', 'RMVXACE', 'RMMV', 'RMMZ'] })
+  @ApiQuery({ name: 'q', required: false, description: '按名称 / 简介搜索' })
+  @ApiQuery({ name: 'scope', required: false, description: '范围', enum: ['public', 'mine', 'all'] })
   @Public()
   @Get()
   async list(
@@ -130,6 +139,8 @@ export class ProjectsController {
     return { items, total, ...p };
   }
 
+  @ApiOperation({ summary: '创建项目', description: '创建者成为所有者。' })
+  @ApiCreatedResponse({ type: ProjectModel })
   @Post()
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateProjectDto) {
     if (config.projectCreation === 'superadmin' && !user.isSuperAdmin) {
@@ -152,6 +163,8 @@ export class ProjectsController {
     return project;
   }
 
+  @ApiOperation({ summary: '项目详情', description: '包含当前用户的角色、权限点与词条统计。公开项目无需登录。' })
+  @ApiOkResponse({ type: ProjectDetailModel })
   @Public()
   @Get(':pid')
   async get(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string) {
@@ -188,6 +201,8 @@ export class ProjectsController {
     };
   }
 
+  @ApiOperation({ summary: '修改项目设置', description: '需要管理员及以上。' })
+  @ApiOkResponse({ type: ProjectModel })
   @Patch(':pid')
   async update(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: UpdateProjectDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.MANAGE_PROJECT);
@@ -199,6 +214,7 @@ export class ProjectsController {
     return project;
   }
 
+  @ApiOperation({ summary: '删除项目', description: '仅所有者。删除全部文件、词条与历史，无法恢复。' })
   @Delete(':pid')
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
     await this.access.require(user, pid, PERMISSIONS.DELETE_PROJECT);
@@ -207,6 +223,7 @@ export class ProjectsController {
     return { ok: true };
   }
 
+  @ApiOperation({ summary: '转让项目', description: '仅所有者。原所有者变为管理员。' })
   @Post(':pid/transfer')
   async transfer(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: TransferDto) {
     await this.access.require(user, pid, PERMISSIONS.DELETE_PROJECT);
@@ -228,6 +245,7 @@ export class ProjectsController {
     return { ok: true };
   }
 
+  @ApiOperation({ summary: '项目统计', description: '按状态、分类统计，以及翻译 / 审核贡献榜。' })
   @Public()
   @Get(':pid/stats')
   async stats(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string) {
@@ -268,6 +286,9 @@ export class ProjectsController {
     };
   }
 
+  @ApiOperation({ summary: '项目动态' })
+  @ApiQuery({ name: 'pageSize', required: false, description: '每页条数' })
+  @ApiQuery({ name: 'page', required: false, description: '页码，从 1 开始' })
   @Public()
   @Get(':pid/activity')
   async activityList(

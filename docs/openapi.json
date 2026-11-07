@@ -1,0 +1,3303 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/auth/config": {
+      "get": {
+        "operationId": "AuthController_siteConfig",
+        "summary": "站点配置",
+        "description": "是否开放注册、谁可以创建项目。无需登录。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "认证"
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "summary": "注册",
+        "description": "注册成功后自动登录（写入 Cookie）。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "认证"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "summary": "登录",
+        "description": "使用用户名或邮箱登录，成功后写入 httpOnly Cookie `gt_token`。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "认证"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "summary": "退出登录",
+        "description": "清除登录 Cookie。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "认证"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "summary": "当前用户",
+        "description": "未登录时返回 null。使用 API 令牌时 `authMethod` 为 `token`，并返回令牌的权限范围与有效期。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "认证"
+        ]
+      }
+    },
+    "/api/users/me/tokens": {
+      "get": {
+        "operationId": "TokensController_list",
+        "summary": "我的 API 令牌",
+        "description": "仅限网页登录调用。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "API 令牌"
+        ]
+      },
+      "post": {
+        "operationId": "TokensController_create",
+        "summary": "创建 API 令牌",
+        "description": "仅限网页登录调用。响应中的 `token` 为明文，只返回这一次。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedTokenModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "API 令牌"
+        ]
+      }
+    },
+    "/api/users/me/tokens/{id}": {
+      "delete": {
+        "operationId": "TokensController_remove",
+        "summary": "撤销 API 令牌",
+        "description": "仅限网页登录调用，撤销后立即失效。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "API 令牌"
+        ]
+      }
+    },
+    "/api/users/me": {
+      "patch": {
+        "operationId": "UsersController_updateMe",
+        "summary": "修改个人资料",
+        "description": "仅限网页登录调用。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "用户"
+        ]
+      }
+    },
+    "/api/users/me/password": {
+      "post": {
+        "operationId": "UsersController_changePassword",
+        "summary": "修改密码",
+        "description": "仅限网页登录调用。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "用户"
+        ]
+      }
+    },
+    "/api/users/search": {
+      "get": {
+        "operationId": "UsersController_search",
+        "summary": "搜索用户",
+        "description": "按用户名或昵称搜索，用于邀请成员，最多返回 10 条。",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "关键字",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "用户"
+        ]
+      }
+    },
+    "/api/users/{username}": {
+      "get": {
+        "operationId": "UsersController_profile",
+        "summary": "用户主页",
+        "description": "公开资料、参与的项目与贡献统计。",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "用户"
+        ]
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "operationId": "UsersController_adminStats",
+        "summary": "全站统计",
+        "description": "仅超级管理员（网页登录）。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "管理后台"
+        ]
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "operationId": "UsersController_adminUsers",
+        "summary": "用户列表",
+        "description": "仅超级管理员（网页登录）。",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "按用户名 / 邮箱 / 昵称搜索",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "管理后台"
+        ]
+      }
+    },
+    "/api/admin/users/{id}": {
+      "patch": {
+        "operationId": "UsersController_adminUpdate",
+        "summary": "封禁 / 解封、设置超级管理员",
+        "description": "仅超级管理员（网页登录）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "管理后台"
+        ]
+      }
+    },
+    "/api/admin/users/{id}/reset-password": {
+      "post": {
+        "operationId": "UsersController_adminResetPassword",
+        "summary": "重置用户密码",
+        "description": "仅超级管理员（网页登录）。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "管理后台"
+        ]
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "operationId": "ProjectsController_list",
+        "summary": "项目列表",
+        "description": "scope=public 公开项目（无需登录）；mine 我参与的；all 全部（仅超级管理员）。",
+        "parameters": [
+          {
+            "name": "engine",
+            "required": false,
+            "in": "query",
+            "description": "按引擎筛选",
+            "schema": {
+              "enum": [
+                "RMXP",
+                "RMVX",
+                "RMVXACE",
+                "RMMV",
+                "RMMZ"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "范围",
+            "schema": {
+              "enum": [
+                "public",
+                "mine",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "按名称 / 简介搜索",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      },
+      "post": {
+        "operationId": "ProjectsController_create",
+        "summary": "创建项目",
+        "description": "创建者成为所有者。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      }
+    },
+    "/api/projects/{pid}": {
+      "get": {
+        "operationId": "ProjectsController_get",
+        "summary": "项目详情",
+        "description": "包含当前用户的角色、权限点与词条统计。公开项目无需登录。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectsController_update",
+        "summary": "修改项目设置",
+        "description": "需要管理员及以上。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      },
+      "delete": {
+        "operationId": "ProjectsController_remove",
+        "summary": "删除项目",
+        "description": "仅所有者。删除全部文件、词条与历史，无法恢复。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      }
+    },
+    "/api/projects/{pid}/transfer": {
+      "post": {
+        "operationId": "ProjectsController_transfer",
+        "summary": "转让项目",
+        "description": "仅所有者。原所有者变为管理员。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      }
+    },
+    "/api/projects/{pid}/stats": {
+      "get": {
+        "operationId": "ProjectsController_stats",
+        "summary": "项目统计",
+        "description": "按状态、分类统计，以及翻译 / 审核贡献榜。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      }
+    },
+    "/api/projects/{pid}/activity": {
+      "get": {
+        "operationId": "ProjectsController_activityList",
+        "summary": "项目动态",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "项目"
+        ]
+      }
+    },
+    "/api/projects/{pid}/members": {
+      "get": {
+        "operationId": "MembersController_list",
+        "summary": "成员列表",
+        "description": "含每位成员的翻译 / 审核数。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/members/{uid}": {
+      "patch": {
+        "operationId": "MembersController_changeRole",
+        "summary": "修改成员角色",
+        "description": "管理员只能管理比自己低的角色。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      },
+      "delete": {
+        "operationId": "MembersController_remove",
+        "summary": "移除成员 / 退出项目",
+        "description": "uid 为自己时表示退出；所有者不能退出。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/join-requests": {
+      "post": {
+        "operationId": "MembersController_requestJoin",
+        "summary": "申请加入",
+        "description": "仅公开项目。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      },
+      "get": {
+        "operationId": "MembersController_listRequests",
+        "summary": "加入申请列表",
+        "description": "需要成员管理权限。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "状态",
+            "schema": {
+              "enum": [
+                "PENDING",
+                "APPROVED",
+                "REJECTED",
+                "CANCELED"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/join-requests/mine": {
+      "delete": {
+        "operationId": "MembersController_cancelMine",
+        "summary": "撤回我的申请",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/join-requests/{rid}/approve": {
+      "post": {
+        "operationId": "MembersController_approve",
+        "summary": "批准加入申请",
+        "description": "可指定角色，默认翻译员。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/join-requests/{rid}/reject": {
+      "post": {
+        "operationId": "MembersController_reject",
+        "summary": "拒绝加入申请",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/invitations": {
+      "post": {
+        "operationId": "MembersController_invite",
+        "summary": "邀请成员",
+        "description": "按用户名或邮箱邀请，对方接受后加入。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      },
+      "get": {
+        "operationId": "MembersController_listInvitations",
+        "summary": "已发出的邀请",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/invitations/{iid}": {
+      "delete": {
+        "operationId": "MembersController_cancelInvitation",
+        "summary": "撤回邀请",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "iid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/invitations": {
+      "get": {
+        "operationId": "MembersController_myInvitations",
+        "summary": "我收到的邀请",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/invitations/{iid}/{action}": {
+      "post": {
+        "operationId": "MembersController_respond",
+        "summary": "接受 / 拒绝邀请",
+        "parameters": [
+          {
+            "name": "iid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "accept",
+                "decline"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "成员与邀请"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files": {
+      "get": {
+        "operationId": "FilesController_list",
+        "summary": "文件列表",
+        "description": "含每个文件的词条状态统计。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      },
+      "post": {
+        "operationId": "FilesController_upload",
+        "summary": "上传文件",
+        "description": "支持多个数据文件、整个游戏目录（配合 paths 字段）或 zip 压缩包。返回解析任务，需轮询任务状态。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  },
+                  "paths": {
+                    "type": "string",
+                    "description": "可选，与 files 一一对应的相对路径 JSON 数组，如 [\"Game/Data/Map001.rvdata2\"]"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files/{fid}/replace": {
+      "post": {
+        "operationId": "FilesController_replace",
+        "summary": "上传新版本（更新原文）",
+        "description": "已有译文按键名保留，原文变化的词条标记为「有疑问」。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files/{fid}": {
+      "delete": {
+        "operationId": "FilesController_remove",
+        "summary": "删除文件",
+        "description": "同时删除其词条、译文与历史。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files/{fid}/download": {
+      "get": {
+        "operationId": "FilesController_download",
+        "summary": "下载原文件",
+        "description": "需要文件管理权限。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/jobs": {
+      "get": {
+        "operationId": "FilesController_jobsList",
+        "summary": "最近的任务",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "任务类型",
+            "schema": {
+              "enum": [
+                "PARSE",
+                "EXPORT"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/jobs/{jid}": {
+      "get": {
+        "operationId": "FilesController_jobGet",
+        "summary": "任务状态",
+        "description": "用于轮询解析 / 导出进度。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries": {
+      "get": {
+        "operationId": "EntriesController_list",
+        "summary": "词条列表 / 搜索",
+        "description": "默认不含「已隐藏」词条，按文件与出现顺序排列。公开项目无需登录。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": false,
+            "in": "query",
+            "description": "文件 ID",
+            "schema": {}
+          },
+          {
+            "name": "stage",
+            "required": false,
+            "in": "query",
+            "description": "状态，多个用逗号分隔，如 UNTRANSLATED,QUESTIONED",
+            "schema": {}
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "分类，多个用逗号分隔，如 dialogue,choice",
+            "schema": {}
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "搜索关键字",
+            "schema": {}
+          },
+          {
+            "name": "field",
+            "required": false,
+            "in": "query",
+            "description": "搜索字段",
+            "schema": {
+              "enum": [
+                "all",
+                "original",
+                "translation",
+                "key",
+                "context"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "translatorId",
+            "required": false,
+            "in": "query",
+            "description": "按译者筛选",
+            "schema": {}
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "排序",
+            "schema": {
+              "enum": [
+                "order",
+                "updated"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {}
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedEntriesModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}": {
+      "get": {
+        "operationId": "EntriesController_get",
+        "summary": "词条详情",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      },
+      "put": {
+        "operationId": "EntriesController_update",
+        "summary": "保存译文 / 修改状态",
+        "description": "必须带上当前 `version`；若已被他人修改返回 409，响应中的 `current` 为最新词条。不传 `stage` 时自动推断（有译文 → 已翻译）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEntryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "版本冲突，响应包含 message 与 current（最新词条）"
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/neighbors": {
+      "get": {
+        "operationId": "EntriesController_neighbors",
+        "summary": "前后相邻词条",
+        "description": "同一文件中前后各 3 条，用于理解上下文。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/batch": {
+      "post": {
+        "operationId": "EntriesController_batch",
+        "summary": "批量操作",
+        "description": "按 ids 或筛选条件（filter，字段同词条列表）批量审核、锁定、隐藏等；不符合条件的词条会被跳过。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/history": {
+      "get": {
+        "operationId": "EntriesController_history",
+        "summary": "修改历史",
+        "description": "最近 100 条。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/rollback": {
+      "post": {
+        "operationId": "EntriesController_rollback",
+        "summary": "回滚到历史版本",
+        "description": "需要带上当前 `version`。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/suggestions": {
+      "get": {
+        "operationId": "EntriesController_suggestions",
+        "summary": "翻译记忆推荐",
+        "description": "按原文相似度推荐项目内已有译文。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/tm/fill": {
+      "post": {
+        "operationId": "EntriesController_fill",
+        "summary": "翻译记忆批量填充",
+        "description": "把原文完全相同的已有译文填入未翻译词条，需要审核员及以上。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/terms": {
+      "get": {
+        "operationId": "TermsController_list",
+        "summary": "术语列表",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "术语表"
+        ]
+      },
+      "post": {
+        "operationId": "TermsController_create",
+        "summary": "添加术语",
+        "description": "需要审核员及以上。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "术语表"
+        ]
+      }
+    },
+    "/api/projects/{pid}/terms/{tid}": {
+      "patch": {
+        "operationId": "TermsController_update",
+        "summary": "修改术语",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "术语表"
+        ]
+      },
+      "delete": {
+        "operationId": "TermsController_remove",
+        "summary": "删除术语",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "术语表"
+        ]
+      }
+    },
+    "/api/projects/{pid}/terms/import": {
+      "post": {
+        "operationId": "TermsController_import",
+        "summary": "批量导入术语",
+        "description": "每行「术语,译法[,备注]」，也支持 Tab 分隔。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "术语表"
+        ]
+      }
+    },
+    "/api/projects/{pid}/exports": {
+      "post": {
+        "operationId": "ExportsController_create",
+        "summary": "生成导出包",
+        "description": "异步任务，完成后通过下载接口获取 zip。需要管理员及以上。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "导出"
+        ]
+      },
+      "get": {
+        "operationId": "ExportsController_list",
+        "summary": "导出记录",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "导出"
+        ]
+      }
+    },
+    "/api/projects/{pid}/exports/{jid}/download": {
+      "get": {
+        "operationId": "ExportsController_download",
+        "summary": "下载导出包",
+        "description": "zip 内保留游戏目录结构，所有成员可下载。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "导出"
+        ]
+      }
+    },
+    "/api/projects/{pid}/exports/{jid}": {
+      "delete": {
+        "operationId": "ExportsController_remove",
+        "summary": "删除导出记录",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "导出"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "GameTrans API",
+    "description": "\nRPG Maker 本地化协作平台的 REST API。所有接口都在 `/api` 下，请求与响应均为 JSON（上传文件使用 `multipart/form-data`）。\n\n## 认证\n\n| 方式 | 用法 | 适用场景 |\n| --- | --- | --- |\n| 网页登录 | `POST /api/auth/login` 后由服务器写入 httpOnly Cookie `gt_token` | 浏览器 |\n| 个人 API 令牌 | 请求头 `Authorization: Bearer gt_xxxxxxxx` | 脚本、CI、机器人 |\n\n个人 API 令牌在网页「个人中心 → API 令牌」中创建，明文只显示一次。\n\n- **只读（READ）**：只能发起 GET / HEAD 请求。\n- **读写（WRITE）**：可以执行本人在项目中的角色允许的全部操作。\n- **项目限定**：创建时可限定到单个项目，之后只能访问 `/api/projects/{该项目}/…` 与 `/api/auth/me`。\n- 令牌**不继承超级管理员权限**；管理令牌、修改密码与资料必须在网页登录后操作。\n- 有效期 7 / 30 / 90 / 365 天，可随时在网页中撤销。\n\n## 错误\n\n出错时返回对应的 HTTP 状态码，响应体格式见 `ErrorModel`，例如 `{\"statusCode\":403,\"message\":\"没有权限执行此操作\",\"error\":\"Forbidden\"}`。参数校验失败时 `message` 可能是字符串数组。\n\n- 401：未登录，或令牌无效 / 已过期\n- 403：没有权限（含只读令牌执行写操作、限定项目的令牌访问其他项目）\n- 404：资源不存在（私有项目对非成员也返回 404）\n- 409：冲突（如保存词条时 `version` 已过期，响应中的 `current` 为最新词条）\n\n## 典型流程\n\n1. `POST /api/projects/{pid}/files` 上传数据文件或 zip，返回解析任务。\n2. 轮询 `GET /api/projects/{pid}/jobs/{jid}`，直到 `status` 为 `SUCCEEDED`。\n3. `GET /api/projects/{pid}/entries?stage=UNTRANSLATED` 分页获取待翻译词条。\n4. `PUT /api/projects/{pid}/entries/{eid}` 提交译文，需带上词条当前的 `version`。\n5. `POST /api/projects/{pid}/exports` 生成导出包，轮询任务完成后通过 `GET /api/projects/{pid}/exports/{jid}/download` 下载。\n",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "认证",
+      "description": "注册、登录、当前用户"
+    },
+    {
+      "name": "API 令牌",
+      "description": "个人 API 令牌的创建与撤销（仅限网页登录）"
+    },
+    {
+      "name": "项目",
+      "description": "项目的增删改查、统计与动态"
+    },
+    {
+      "name": "文件与任务",
+      "description": "上传数据文件、更新原文、查询解析 / 导出任务"
+    },
+    {
+      "name": "词条",
+      "description": "查询、翻译、审核、批量操作、历史与翻译记忆"
+    },
+    {
+      "name": "术语表",
+      "description": "项目术语的维护与导入"
+    },
+    {
+      "name": "导出",
+      "description": "生成并下载可覆盖到游戏目录的导出包"
+    },
+    {
+      "name": "成员与邀请",
+      "description": "成员角色、加入申请与邀请"
+    },
+    {
+      "name": "用户",
+      "description": "个人资料与用户搜索"
+    },
+    {
+      "name": "管理后台",
+      "description": "全站管理（仅超级管理员，网页登录）"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "token": {
+        "scheme": "bearer",
+        "bearerFormat": "gt_…",
+        "type": "http",
+        "description": "个人 API 令牌"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gt_token",
+        "description": "网页登录后的会话 Cookie"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 32,
+            "pattern": "/^[A-Za-z0-9_\\-.]+$/"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "login",
+          "password"
+        ]
+      },
+      "TokenProjectModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "TokenModel": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "READ",
+              "WRITE"
+            ]
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "project": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TokenProjectModel"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "明文前缀，用于辨认"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "lastUsedAt",
+          "project",
+          "id",
+          "name",
+          "prefix",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "CreateTokenDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "令牌名称，便于辨认用途，如「机翻脚本」",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "scope": {
+            "type": "string",
+            "description": "READ：只读（仅 GET 请求）；WRITE：读写（本人角色允许的全部操作）",
+            "enum": [
+              "READ",
+              "WRITE"
+            ]
+          },
+          "expiresInDays": {
+            "type": "number",
+            "description": "有效期（天）：7 / 30 / 90 / 365，默认 90",
+            "enum": [
+              7,
+              30,
+              90,
+              365
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "description": "限定只能访问的项目 ID；不填表示本人参与的全部项目"
+          }
+        },
+        "required": [
+          "name",
+          "scope"
+        ]
+      },
+      "CreatedTokenModel": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "READ",
+              "WRITE"
+            ]
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "project": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TokenProjectModel"
+              }
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "令牌明文，只在创建时返回这一次，请妥善保存",
+            "example": "gt_3q2+7w..."
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "明文前缀，用于辨认"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "lastUsedAt",
+          "project",
+          "token",
+          "id",
+          "name",
+          "prefix",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "OkModel": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "UpdateMeDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "bio": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "oldPassword",
+          "newPassword"
+        ]
+      },
+      "AdminUpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "isSuperAdmin": {
+            "type": "boolean"
+          },
+          "isBanned": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "CreateProjectDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 5000
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "RMXP",
+              "RMVX",
+              "RMVXACE",
+              "RMMV",
+              "RMMZ"
+            ]
+          },
+          "sourceLang": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en",
+              "zh-CN",
+              "zh-TW",
+              "ko",
+              "ru",
+              "fr",
+              "de",
+              "es",
+              "pt",
+              "vi",
+              "th"
+            ]
+          },
+          "targetLang": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en",
+              "zh-CN",
+              "zh-TW",
+              "ko",
+              "ru",
+              "fr",
+              "de",
+              "es",
+              "pt",
+              "vi",
+              "th"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "engine",
+          "sourceLang",
+          "targetLang",
+          "visibility"
+        ]
+      },
+      "ProjectModel": {
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "enum": [
+              "RMXP",
+              "RMVX",
+              "RMVXACE",
+              "RMMV",
+              "RMMZ"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceLang": {
+            "type": "string",
+            "description": "源语言代码，如 ja"
+          },
+          "targetLang": {
+            "type": "string",
+            "description": "目标语言代码，如 zh-CN"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine",
+          "visibility",
+          "id",
+          "name",
+          "description",
+          "sourceLang",
+          "targetLang",
+          "ownerId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "StageCountsModel": {
+        "type": "object",
+        "properties": {
+          "UNTRANSLATED": {
+            "type": "number"
+          },
+          "TRANSLATED": {
+            "type": "number"
+          },
+          "QUESTIONED": {
+            "type": "number"
+          },
+          "REVIEWED": {
+            "type": "number"
+          },
+          "LOCKED": {
+            "type": "number"
+          },
+          "HIDDEN": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "UNTRANSLATED",
+          "TRANSLATED",
+          "QUESTIONED",
+          "REVIEWED",
+          "LOCKED",
+          "HIDDEN"
+        ]
+      },
+      "ProjectDetailModel": {
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "enum": [
+              "RMXP",
+              "RMVX",
+              "RMVXACE",
+              "RMMV",
+              "RMMZ"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          },
+          "myRole": {
+            "type": "string",
+            "nullable": true,
+            "description": "当前用户在项目中的角色，非成员为 null",
+            "enum": [
+              "OWNER",
+              "ADMIN",
+              "REVIEWER",
+              "TRANSLATOR",
+              "VIEWER"
+            ]
+          },
+          "permissions": {
+            "description": "当前用户在该项目拥有的权限点",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/StageCountsModel"
+          },
+          "memberCount": {
+            "type": "number"
+          },
+          "fileCount": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceLang": {
+            "type": "string",
+            "description": "源语言代码，如 ja"
+          },
+          "targetLang": {
+            "type": "string",
+            "description": "目标语言代码，如 zh-CN"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine",
+          "visibility",
+          "myRole",
+          "permissions",
+          "stats",
+          "memberCount",
+          "fileCount",
+          "id",
+          "name",
+          "description",
+          "sourceLang",
+          "targetLang",
+          "ownerId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateProjectDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 5000
+          },
+          "sourceLang": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en",
+              "zh-CN",
+              "zh-TW",
+              "ko",
+              "ru",
+              "fr",
+              "de",
+              "es",
+              "pt",
+              "vi",
+              "th"
+            ]
+          },
+          "targetLang": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en",
+              "zh-CN",
+              "zh-TW",
+              "ko",
+              "ru",
+              "fr",
+              "de",
+              "es",
+              "pt",
+              "vi",
+              "th"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          }
+        }
+      },
+      "TransferDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "RoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "REVIEWER",
+              "TRANSLATOR",
+              "VIEWER"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "JoinRequestDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500
+          }
+        }
+      },
+      "ApproveDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "REVIEWER",
+              "TRANSLATOR",
+              "VIEWER"
+            ]
+          }
+        }
+      },
+      "InviteDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "REVIEWER",
+              "TRANSLATOR",
+              "VIEWER"
+            ]
+          }
+        },
+        "required": [
+          "username",
+          "role"
+        ]
+      },
+      "JobModel": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PARSE",
+              "EXPORT"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "description": "任务结果：解析任务为各文件的新增/变更统计；导出任务包含 fileName、size、applied 等",
+            "additionalProperties": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "number",
+            "description": "进度 0-100"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "type",
+          "status",
+          "result",
+          "id",
+          "projectId",
+          "progress",
+          "error",
+          "createdAt",
+          "finishedAt"
+        ]
+      },
+      "UserBriefModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName"
+        ]
+      },
+      "FileRefModel": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "相对游戏根目录的路径，如 data/Map001.json"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "EntryModel": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "choice",
+              "scroll",
+              "speaker",
+              "name",
+              "nickname",
+              "description",
+              "message",
+              "system",
+              "map",
+              "note",
+              "script",
+              "plugin",
+              "other"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "UNTRANSLATED",
+              "TRANSLATED",
+              "QUESTIONED",
+              "REVIEWED",
+              "LOCKED",
+              "HIDDEN"
+            ]
+          },
+          "translator": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserBriefModel"
+              }
+            ]
+          },
+          "reviewer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserBriefModel"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "文件内唯一的键，如 events/1/pages/0/list/3"
+          },
+          "original": {
+            "type": "string"
+          },
+          "translation": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string",
+            "description": "位置说明（地图、事件、页、指令等）"
+          },
+          "danger": {
+            "type": "boolean",
+            "description": "危险文本（脚本 / 插件 / 备注）"
+          },
+          "version": {
+            "type": "number",
+            "description": "乐观锁版本号，保存译文时需原样带回"
+          },
+          "sortOrder": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileRefModel"
+          }
+        },
+        "required": [
+          "category",
+          "stage",
+          "translator",
+          "reviewer",
+          "id",
+          "fileId",
+          "key",
+          "original",
+          "translation",
+          "context",
+          "danger",
+          "version",
+          "sortOrder",
+          "updatedAt",
+          "file"
+        ]
+      },
+      "PagedEntriesModel": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntryModel"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "UpdateEntryDto": {
+        "type": "object",
+        "properties": {
+          "translation": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "UNTRANSLATED",
+              "TRANSLATED",
+              "QUESTIONED",
+              "REVIEWED",
+              "LOCKED",
+              "HIDDEN"
+            ]
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "translation",
+          "version"
+        ]
+      },
+      "BatchDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "review",
+              "unreview",
+              "lock",
+              "unlock",
+              "hide",
+              "unhide",
+              "question",
+              "clear"
+            ]
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filter": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "RollbackDto": {
+        "type": "object",
+        "properties": {
+          "historyId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "historyId",
+          "version"
+        ]
+      },
+      "FillDto": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          }
+        }
+      },
+      "TermDto": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "caseSensitive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "term",
+          "translation"
+        ]
+      },
+      "UpdateTermDto": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "caseSensitive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "每行「术语<Tab或逗号>译法[<Tab或逗号>备注]」",
+            "maxLength": 2000000
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "CreateExportDto": {
+        "type": "object",
+        "properties": {
+          "fileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stages": {
+            "type": "string",
+            "enum": [
+              "TRANSLATED",
+              "QUESTIONED",
+              "REVIEWED",
+              "LOCKED"
+            ]
+          },
+          "includeJson": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "stages"
+        ]
+      },
+      "ErrorModel": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": "没有权限执行此操作"
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP 状态码"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误类型，如 Forbidden、Not Found"
+          }
+        },
+        "required": [
+          "message",
+          "statusCode"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "token": []
+    },
+    {
+      "cookie": []
+    }
+  ]
+}

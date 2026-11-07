@@ -319,3 +319,19 @@ export function missingControlCodes(original: string, translation: string): stri
   }
   return missing;
 }
+
+// ───────────────────────── API 令牌 ─────────────────────────
+
+export const TOKEN_SCOPES = ['READ', 'WRITE'] as const;
+export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+export const TOKEN_SCOPE_LABELS: Record<TokenScope, string> = {
+  READ: '只读',
+  WRITE: '读写',
+};
+
+/** 可选有效期（天），最长 1 年 */
+export const TOKEN_EXPIRY_DAYS = [7, 30, 90, 365] as const;
+export const DEFAULT_TOKEN_EXPIRY_DAYS = 90;
+export const TOKEN_PREFIX = 'gt_';
+export const MAX_TOKENS_PER_USER = 20;

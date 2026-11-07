@@ -1,4 +1,5 @@
 import {
+  ApiOutlined,
   BulbOutlined,
   CrownOutlined,
   LogoutOutlined,
@@ -60,6 +61,8 @@ export function AppLayout() {
                       { key: 'me', icon: <UserOutlined />, label: '个人中心', onClick: () => nav('/me') },
                       ...(canCreate ? [{ key: 'new', icon: <PlusOutlined />, label: '新建项目', onClick: () => nav('/projects/new') }] : []),
                       ...(user.isSuperAdmin ? [{ key: 'admin', icon: <CrownOutlined />, label: '管理后台', onClick: () => nav('/admin') }] : []),
+                      { key: 'tokens', icon: <ApiOutlined />, label: 'API 令牌', onClick: () => nav('/me?tab=tokens') },
+                      { key: 'docs', icon: <ApiOutlined />, label: <a href="/api/docs" target="_blank" rel="noreferrer">API 文档</a> },
                       { type: 'divider' },
                       {
                         key: 'logout',

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Res, Str
 import { PERMISSIONS, STAGES } from '@gametrans/shared';
 import { ArrayNotEmpty, IsArray, IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import type { Response } from 'express';
+import { ApiCreatedResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { AccessService } from '../common/access.service';
 import { AuthUser, CurrentUser } from '../common/decorators';
 import { attachment } from '../common/http';
@@ -9,6 +10,7 @@ import { StorageService } from '../common/storage.service';
 import type { ExportResult } from '../jobs/export.service';
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { JobModel } from '../common/api.models';
 
 const EXPORTABLE = STAGES.filter((s) => s !== 'UNTRANSLATED' && s !== 'HIDDEN') as string[];
 
@@ -18,6 +20,7 @@ class CreateExportDto {
   @IsOptional() @IsBoolean() includeJson?: boolean;
 }
 
+@ApiTags('导出')
 @Controller('projects/:pid/exports')
 export class ExportsController {
   constructor(
@@ -27,12 +30,15 @@ export class ExportsController {
     private readonly jobs: JobsService,
   ) {}
 
+  @ApiOperation({ summary: '生成导出包', description: '异步任务，完成后通过下载接口获取 zip。需要管理员及以上。' })
+  @ApiCreatedResponse({ type: JobModel })
   @Post()
   async create(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: CreateExportDto) {
     await this.access.require(user, pid, PERMISSIONS.CREATE_EXPORT);
     return this.jobs.enqueue(pid, 'EXPORT', { fileIds: dto.fileIds, stages: dto.stages, includeJson: !!dto.includeJson }, user.id);
   }
 
+  @ApiOperation({ summary: '导出记录' })
   @Get()
   async list(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
     await this.access.require(user, pid, PERMISSIONS.DOWNLOAD_EXPORT);
@@ -54,6 +60,8 @@ export class ExportsController {
     });
   }
 
+  @ApiOperation({ summary: '下载导出包', description: 'zip 内保留游戏目录结构，所有成员可下载。' })
+  @ApiProduces('application/zip')
   @Get(':jid/download')
   async download(
     @CurrentUser() user: AuthUser,
@@ -73,6 +81,7 @@ export class ExportsController {
     return new StreamableFile(this.storage.stream(result.storageKey));
   }
 
+  @ApiOperation({ summary: '删除导出记录' })
   @Delete(':jid')
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('jid') jid: string) {
     await this.access.require(user, pid, PERMISSIONS.CREATE_EXPORT);

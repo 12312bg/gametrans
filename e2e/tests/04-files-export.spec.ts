@@ -155,8 +155,10 @@ test('下载原文件、删除文件与导出记录', async ({ page }) => {
   await expect(page.getByRole('row').filter({ hasText: 'data/Troops.json' })).toHaveCount(0);
 
   await page.goto(`/projects/${pid}/exports`);
-  const before = await page.locator('.ant-table-row').count();
-  await page.locator('.ant-table-row').first().getByRole('button', { name: 'delete' }).click();
+  // 前面两个用例各生成了一个导出包
+  const rows = page.locator('.ant-table-row');
+  await expect(rows).toHaveCount(2);
+  await rows.first().getByRole('button', { name: 'delete' }).click();
   await btn(page.locator('.ant-popconfirm'), '删除').click();
-  await expect(page.locator('.ant-table-row')).toHaveCount(before - 1);
+  await expect(rows).toHaveCount(1);
 });

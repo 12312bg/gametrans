@@ -12,7 +12,7 @@
     "build": "pnpm build:libs && pnpm --filter @gametrans/server build && pnpm --filter @gametrans/web build",
     "dev:server": "pnpm --filter @gametrans/server dev",
     "dev:web": "pnpm --filter @gametrans/web dev",
-    "test": "pnpm --filter @gametrans/rpgmaker test",
+    "test": "pnpm --filter @gametrans/shared --filter @gametrans/rpgmaker --filter @gametrans/web test",
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @gametrans/server prisma:migrate",
     "db:deploy": "pnpm --filter @gametrans/server prisma:deploy",

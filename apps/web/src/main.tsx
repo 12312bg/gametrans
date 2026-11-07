@@ -12,7 +12,6 @@ import './styles.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // 4xx 不重试
       retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
       refetchOnWindowFocus: false,
       staleTime: 10_000,

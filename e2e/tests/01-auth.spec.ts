@@ -40,13 +40,11 @@ test.describe('账号', () => {
     await btn(page, '登录').click();
     await expect(toast(page, '用户名或密码错误')).toBeVisible();
 
-    // 用邮箱登录
     await page.getByPlaceholder('用户名 / 邮箱').fill(`${u.username}@e2e.test`);
     await page.getByPlaceholder('密码').fill(u.password);
     await btn(page, '登录').click();
     await expect(toast(page, '欢迎回来')).toBeVisible();
 
-    // 退出
     await page.locator('.header-user').click();
     await page.getByRole('menuitem', { name: /退出登录/ }).click();
     await expect(btn(page, '登录')).toBeVisible();

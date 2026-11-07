@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
@@ -13,8 +13,9 @@ export class RegisterDto {
   @Length(8, 72, { message: '密码长度为 8-72 个字符' })
   password: string;
 
+  @IsOptional()
   @IsString()
-  @Length(0, 32)
+  @Length(0, 32, { message: '昵称最多 32 个字符' })
   displayName?: string;
 }
 

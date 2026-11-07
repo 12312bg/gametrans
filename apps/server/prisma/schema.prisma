@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Engine {
+  RMXP
+  RMVX
+  RMVXACE
+  RMMV
+  RMMZ
+}
+
+enum ProjectRole {
+  OWNER
+  ADMIN
+  REVIEWER
+  TRANSLATOR
+  VIEWER
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum Stage {
+  UNTRANSLATED
+  TRANSLATED
+  QUESTIONED
+  REVIEWED
+  LOCKED
+  HIDDEN
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+enum JobType {
+  PARSE
+  EXPORT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  bio          String   @default("")
+  isSuperAdmin Boolean  @default(false)
+  isBanned     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships        ProjectMember[]
+  ownedProjects      Project[]       @relation("ProjectOwner")
+  joinRequests       JoinRequest[]   @relation("JoinRequestUser")
+  handledRequests    JoinRequest[]   @relation("JoinRequestHandler")
+  invitations        Invitation[]    @relation("InvitationInvitee")
+  sentInvitations    Invitation[]    @relation("InvitationInviter")
+  history            EntryHistory[]
+  translatedEntries  Entry[]         @relation("EntryTranslator")
+  reviewedEntries    Entry[]         @relation("EntryReviewer")
+  terms              Term[]
+  jobs               Job[]
+  activities         Activity[]
+}
+
+model Project {
+  id          String     @id @default(cuid())
+  name        String
+  description String     @default("")
+  engine      Engine
+  sourceLang  String
+  targetLang  String
+  visibility  Visibility @default(PUBLIC)
+  ownerId     String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  owner        User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members      ProjectMember[]
+  files        File[]
+  entries      Entry[]
+  joinRequests JoinRequest[]
+  invitations  Invitation[]
+  terms        Term[]
+  jobs         Job[]
+  activities   Activity[]
+  history      EntryHistory[]
+
+  @@index([visibility, updatedAt])
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+  role      ProjectRole
+  joinedAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+}
+
+model JoinRequest {
+  id          String        @id @default(cuid())
+  projectId   String
+  userId      String
+  message     String        @default("")
+  status      RequestStatus @default(PENDING)
+  handledById String?
+  handledAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("JoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  handledBy User?   @relation("JoinRequestHandler", fields: [handledById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([userId, status])
+}
+
+model Invitation {
+  id          String        @id @default(cuid())
+  projectId   String
+  inviteeId   String
+  inviterId   String
+  role        ProjectRole
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  respondedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invitee User    @relation("InvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  inviter User    @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([inviteeId, status])
+  @@index([projectId, status])
+}
+
+model File {
+  id          String   @id @default(cuid())
+  projectId   String
+  /// 相对游戏根目录的路径，如 data/Map001.json、Data/Map001.rvdata2
+  path        String
+  kind        String
+  format      String
+  storageKey  String
+  size        Int
+  sha256      String
+  warnings    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entries Entry[]
+
+  @@unique([projectId, path])
+}
+
+model Entry {
+  id           String    @id @default(cuid())
+  projectId    String
+  fileId       String
+  key          String
+  original     String
+  translation  String    @default("")
+  context      String    @default("")
+  category     String
+  danger       Boolean   @default(false)
+  stage        Stage     @default(UNTRANSLATED)
+  sortOrder    Int
+  version      Int       @default(0)
+  translatorId String?
+  reviewerId   String?
+  updatedAt    DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file       File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  translator User?          @relation("EntryTranslator", fields: [translatorId], references: [id], onDelete: SetNull)
+  reviewer   User?          @relation("EntryReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  history    EntryHistory[]
+
+  @@unique([fileId, key])
+  @@index([projectId, stage])
+  @@index([fileId, sortOrder])
+  @@index([projectId, category])
+}
+
+model EntryHistory {
+  id          String   @id @default(cuid())
+  entryId     String
+  projectId   String
+  userId      String?
+  action      String
+  translation String
+  stage       Stage
+  /// 原文变更时记录旧原文
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  entry   Entry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entryId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([projectId, userId])
+}
+
+model Term {
+  id            String   @id @default(cuid())
+  projectId     String
+  term          String
+  translation   String
+  note          String   @default("")
+  caseSensitive Boolean  @default(false)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, term])
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  projectId   String
+  type        JobType
+  status      JobStatus @default(QUEUED)
+  progress    Int       @default(0)
+  /// 任务参数（上传的临时文件、导出选项等）
+  payload     Json
+  /// 任务结果（解析统计、导出文件信息等）
+  result      Json?
+  error       String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, type, createdAt])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String?
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}

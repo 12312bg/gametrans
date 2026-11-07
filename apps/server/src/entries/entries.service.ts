@@ -1,18 +1,21 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
-  BATCH_ACTION_LABELS,
   BATCH_ACTION_PERMISSION,
   BatchAction,
+  ContextPart,
   ENTRY_CATEGORIES,
   STAGES,
   Stage,
+  formatContext,
   permissionForTransition,
   permissionToEdit,
 } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { AccessService, ProjectContext } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
-import { chunk, escapeLike, pageParams } from '../common/pagination';
+import { fail } from '../common/errors';
+import type { Translator } from '../common/locale';
+import { chunk, escapeLike, pageParams } from '../common/query';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface EntryFilter {
@@ -33,7 +36,8 @@ export const ENTRY_SELECT = {
   key: true,
   original: true,
   translation: true,
-  context: true,
+  contextData: true,
+  contextSearch: true,
   category: true,
   danger: true,
   stage: true,
@@ -46,6 +50,12 @@ export const ENTRY_SELECT = {
 } satisfies Prisma.EntrySelect;
 
 const MAX_BATCH = 200_000;
+
+/** 附加按请求语言渲染的位置说明；旧数据回退为原中文文本 */
+export function withContextText<T extends { contextData: unknown; contextSearch: string }>(e: T, t: Translator) {
+  const parts = e.contextData as ContextPart[] | null;
+  return { ...e, contextText: parts ? formatContext(parts, t) : e.contextSearch };
+}
 
 function normalizeText(s: string): string {
   return s.replace(/\r\n?/g, '\n');
@@ -98,10 +108,10 @@ export class EntriesService {
           and.push({ key: c });
           break;
         case 'context':
-          and.push({ context: c });
+          and.push({ contextSearch: c });
           break;
         default:
-          and.push({ OR: [{ original: c }, { translation: c }, { key: c }, { context: c }] });
+          and.push({ OR: [{ original: c }, { translation: c }, { key: c }, { contextSearch: c }] });
       }
     }
     return { AND: and };
@@ -121,7 +131,7 @@ export class EntriesService {
 
   async get(projectId: string, id: string) {
     const e = await this.prisma.entry.findFirst({ where: { id, projectId }, select: ENTRY_SELECT });
-    if (!e) throw new NotFoundException('词条不存在');
+    if (!e) throw fail('ENTRY_NOT_FOUND');
     return e;
   }
 
@@ -150,9 +160,9 @@ export class EntriesService {
     const projectId = ctx.project.id;
     const userId = ctx.user!.id;
     const e = await this.prisma.entry.findFirst({ where: { id, projectId } });
-    if (!e) throw new NotFoundException('词条不存在');
+    if (!e) throw fail('ENTRY_NOT_FOUND');
     if (dto.version !== e.version) {
-      throw new ConflictException({ message: '该词条已被其他成员修改，请确认后再保存', current: await this.get(projectId, id) });
+      throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(projectId, id) });
     }
     const translation = normalizeText(dto.translation);
     const changed = translation !== e.translation;
@@ -166,7 +176,7 @@ export class EntriesService {
     else next = cur === 'UNTRANSLATED' || cur === 'QUESTIONED' ? 'TRANSLATED' : cur;
 
     if (translation === '' && (next === 'TRANSLATED' || next === 'REVIEWED')) {
-      throw new BadRequestException('译文为空，不能设为该状态');
+      throw fail('EMPTY_TRANSLATION_STAGE');
     }
     if (translation !== '' && next === 'UNTRANSLATED') next = 'TRANSLATED';
     const tp = permissionForTransition(cur, next);
@@ -185,7 +195,7 @@ export class EntriesService {
 
     const res = await this.prisma.entry.updateMany({ where: { id, version: dto.version }, data });
     if (!res.count) {
-      throw new ConflictException({ message: '该词条已被其他成员修改，请确认后再保存', current: await this.get(projectId, id) });
+      throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(projectId, id) });
     }
     await this.prisma.entryHistory.create({
       data: { entryId: id, projectId, userId, action: changed ? 'TRANSLATE' : 'STAGE', translation, stage: next },
@@ -205,11 +215,11 @@ export class EntriesService {
 
   async rollback(ctx: ProjectContext, id: string, historyId: string, version: number) {
     const h = await this.prisma.entryHistory.findFirst({ where: { id: historyId, entryId: id, projectId: ctx.project.id } });
-    if (!h) throw new NotFoundException('历史版本不存在');
+    if (!h) throw fail('HISTORY_NOT_FOUND');
     const e = await this.prisma.entry.findFirst({ where: { id, projectId: ctx.project.id } });
-    if (!e) throw new NotFoundException('词条不存在');
+    if (!e) throw fail('ENTRY_NOT_FOUND');
     if (version !== e.version) {
-      throw new ConflictException({ message: '该词条已被其他成员修改，请刷新后再回滚', current: await this.get(ctx.project.id, id) });
+      throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(ctx.project.id, id) });
     }
     const cur = e.stage as Stage;
     this.access.assert(ctx, permissionToEdit(cur));
@@ -226,7 +236,7 @@ export class EntriesService {
         updatedAt: new Date(),
       },
     });
-    if (!res.count) throw new ConflictException({ message: '该词条已被其他成员修改', current: await this.get(ctx.project.id, id) });
+    if (!res.count) throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(ctx.project.id, id) });
     await this.prisma.entryHistory.create({
       data: {
         entryId: id,
@@ -289,13 +299,13 @@ export class EntriesService {
             action: 'BATCH',
             translation: action === 'clear' ? '' : r.translation,
             stage: to,
-            note: BATCH_ACTION_LABELS[action],
+            note: action,
           })),
         });
       }
     }
     if (rows.length) {
-      await this.activity.log(projectId, userId, 'entries.batch', `批量${BATCH_ACTION_LABELS[action]} ${rows.length} 条词条`);
+      await this.activity.log(projectId, userId, 'entries.batch', { action, count: rows.length });
     }
     return { affected: rows.length };
   }
@@ -349,7 +359,7 @@ export class EntriesService {
         data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const })),
       });
     }
-    if (updated.length) await this.activity.log(projectId, userId, 'tm.fill', `使用翻译记忆填充了 ${updated.length} 条词条`);
+    if (updated.length) await this.activity.log(projectId, userId, 'tm.fill', { count: updated.length });
     return { affected: updated.length };
   }
 }

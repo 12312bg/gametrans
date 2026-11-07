@@ -11,7 +11,7 @@ export class StorageService {
 
   resolve(key: string): string {
     const full = normalize(join(this.root, key));
-    if (!full.startsWith(this.root + sep)) throw new Error('非法的存储路径');
+    if (!full.startsWith(this.root + sep)) throw new Error(`Invalid storage key: ${key}`);
     return full;
   }
 

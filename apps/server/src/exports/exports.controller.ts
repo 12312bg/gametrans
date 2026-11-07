@@ -1,24 +1,17 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Res, StreamableFile } from '@nestjs/common';
-import { PERMISSIONS, STAGES } from '@gametrans/shared';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
-import type { Response } from 'express';
+import { Body, Controller, Delete, Get, Param, Post, Res, StreamableFile } from '@nestjs/common';
+import { PERMISSIONS } from '@gametrans/shared';
 import { ApiCreatedResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { AccessService } from '../common/access.service';
+import { JobModel } from '../common/api.models';
 import { AuthUser, CurrentUser } from '../common/decorators';
+import { fail } from '../common/errors';
 import { attachment } from '../common/http';
 import { StorageService } from '../common/storage.service';
 import type { ExportResult } from '../jobs/export.service';
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { JobModel } from '../common/api.models';
-
-const EXPORTABLE = STAGES.filter((s) => s !== 'UNTRANSLATED' && s !== 'HIDDEN') as string[];
-
-class CreateExportDto {
-  @IsOptional() @IsArray() @IsString({ each: true }) fileIds?: string[];
-  @IsArray() @ArrayNotEmpty({ message: '请至少选择一种词条状态' }) @IsIn(EXPORTABLE, { each: true }) stages: string[];
-  @IsOptional() @IsBoolean() includeJson?: boolean;
-}
+import { CreateExportDto } from './exports.dto';
 
 @ApiTags('导出')
 @Controller('projects/:pid/exports')
@@ -42,42 +35,18 @@ export class ExportsController {
   @Get()
   async list(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
     await this.access.require(user, pid, PERMISSIONS.DOWNLOAD_EXPORT);
-    return this.prisma.job.findMany({
-      where: { projectId: pid, type: 'EXPORT' },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        status: true,
-        progress: true,
-        payload: true,
-        result: true,
-        error: true,
-        createdAt: true,
-        finishedAt: true,
-        createdBy: { select: { id: true, username: true, displayName: true } },
-      },
-    });
+    return this.jobs.list(pid, 'EXPORT');
   }
 
   @ApiOperation({ summary: '下载导出包', description: 'zip 内保留游戏目录结构，所有成员可下载。' })
   @ApiProduces('application/zip')
   @Get(':jid/download')
-  async download(
-    @CurrentUser() user: AuthUser,
-    @Param('pid') pid: string,
-    @Param('jid') jid: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async download(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('jid') jid: string, @Res({ passthrough: true }) res: Response) {
     await this.access.require(user, pid, PERMISSIONS.DOWNLOAD_EXPORT);
     const job = await this.prisma.job.findFirst({ where: { id: jid, projectId: pid, type: 'EXPORT', status: 'SUCCEEDED' } });
     const result = job?.result as unknown as ExportResult | undefined;
-    if (!result?.storageKey || !(await this.storage.exists(result.storageKey))) throw new NotFoundException('导出包不存在或已删除');
-    res.set({
-      'Content-Type': 'application/zip',
-      'Content-Disposition': attachment(result.fileName),
-      'Content-Length': String(result.size),
-    });
+    if (!result?.storageKey || !(await this.storage.exists(result.storageKey))) throw fail('EXPORT_NOT_FOUND');
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': attachment(result.fileName), 'Content-Length': String(result.size) });
     return new StreamableFile(this.storage.stream(result.storageKey));
   }
 
@@ -86,7 +55,7 @@ export class ExportsController {
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('jid') jid: string) {
     await this.access.require(user, pid, PERMISSIONS.CREATE_EXPORT);
     const job = await this.prisma.job.findFirst({ where: { id: jid, projectId: pid, type: 'EXPORT' } });
-    if (!job) throw new NotFoundException('导出记录不存在');
+    if (!job) throw fail('EXPORT_NOT_FOUND');
     const result = job.result as unknown as ExportResult | null;
     if (result?.storageKey) await this.storage.remove(result.storageKey);
     await this.prisma.job.delete({ where: { id: jid } });

@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { PERMISSIONS, Permission, ProjectRole, can } from '@gametrans/shared';
+import { Injectable } from '@nestjs/common';
+import { PERMISSIONS, Permission, ProjectRole, ROLE_PERMISSIONS, can } from '@gametrans/shared';
 import type { Project } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from './decorators';
+import { fail } from './errors';
 
 export interface ProjectContext {
   project: Project;
@@ -12,30 +13,26 @@ export interface ProjectContext {
   user?: AuthUser;
 }
 
-/** 统一的项目级鉴权：解析当前用户在项目中的角色，并校验权限 */
+/** 项目级鉴权：解析当前用户在项目中的角色并校验权限 */
 @Injectable()
 export class AccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async context(user: AuthUser | undefined, projectId: string): Promise<ProjectContext> {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw new NotFoundException('项目不存在');
-    let role: ProjectRole | null = null;
-    if (user) {
-      const m = await this.prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId, userId: user.id } },
-      });
-      role = (m?.role as ProjectRole) ?? null;
-    }
+    if (!project) throw fail('PROJECT_NOT_FOUND');
+    const member = user
+      ? await this.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: user.id } } })
+      : null;
     const ctx: ProjectContext = {
       project,
-      role,
+      role: (member?.role as ProjectRole) ?? null,
       isSuperAdmin: !!user?.isSuperAdmin,
       isPublic: project.visibility === 'PUBLIC',
       user,
     };
     // 私有项目对无权限者表现为不存在
-    if (!can(ctx, PERMISSIONS.VIEW)) throw new NotFoundException('项目不存在');
+    if (!can(ctx, PERMISSIONS.VIEW)) throw fail('PROJECT_NOT_FOUND');
     return ctx;
   }
 
@@ -47,11 +44,12 @@ export class AccessService {
 
   assert(ctx: ProjectContext, perm: Permission): void {
     if (can(ctx, perm)) return;
-    if (!ctx.user) throw new UnauthorizedException('请先登录');
-    throw new ForbiddenException('没有权限执行此操作');
+    throw fail(ctx.user ? 'FORBIDDEN' : 'AUTH_REQUIRED');
   }
 
-  has(ctx: ProjectContext, perm: Permission): boolean {
-    return can(ctx, perm);
+  permissions(ctx: ProjectContext): Permission[] {
+    if (ctx.isSuperAdmin) return Object.values(PERMISSIONS);
+    if (ctx.role) return ROLE_PERMISSIONS[ctx.role];
+    return ctx.isPublic ? [PERMISSIONS.VIEW] : [];
   }
 }

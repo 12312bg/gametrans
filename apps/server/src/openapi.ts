@@ -14,7 +14,7 @@ async function main() {
   const doc = buildOpenApi(app);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(doc, null, 2)}\n`);
-  console.log(`已写入 ${out}（${Object.keys(doc.paths).length} 个路径）`);
+  console.log(`Wrote ${out} (${Object.keys(doc.paths).length} paths)`);
   await app.close();
 }
 

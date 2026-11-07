@@ -1,24 +1,23 @@
 import { unzlibSync, zlibSync } from 'fflate';
-import type { Engine } from '@gametrans/shared';
+import type { ContextPart, Engine, Issue } from '@gametrans/shared';
+import { ctx as c, fileStem } from '../context';
 import { CommandAdapter, WalkContext, walkEventList } from '../events';
-import { DATABASE_FIELDS, KIND_LABELS, detectKind } from '../kinds';
-import { IvarList, RHash, RObject, RString, RValue, decodeUtf8, encodeUtf8, numOf, strOf } from '../marshal/types';
+import { DATABASE_FIELDS, detectKind } from '../kinds';
 import { MarshalError, MarshalReader } from '../marshal/reader';
+import { IvarList, RHash, RObject, RString, RValue, decodeUtf8, encodeUtf8, numOf, strOf } from '../marshal/types';
 import { dump } from '../marshal/writer';
 import { ParseOptions, ParsedDocument, Slot, UnsupportedFileError } from '../types';
 import { escapeForQuote, findRubyStrings } from './ruby-lexer';
 
 const nonBlank = (s: string | undefined): s is string => typeof s === 'string' && s.trim() !== '';
 
-/** Ace（Ruby 1.9）字符串带 E=true 编码标记；XP/VX（Ruby 1.8）没有 */
-function defaultStringIvars(engine: Engine): IvarList | undefined {
-  return engine === 'RMVXACE' ? [['E', true]] : undefined;
-}
+/** Ace（Ruby 1.9）的字符串带 E=true 编码标记，XP/VX（Ruby 1.8）没有 */
+const defaultStringIvars = (engine: Engine): IvarList | undefined => (engine === 'RMVXACE' ? [['E', true]] : undefined);
 
-function paramsOf(c: RObject): RValue[] {
-  const p = c.get('parameters');
+const paramsOf = (cmd: RObject): RValue[] => {
+  const p = cmd.get('parameters');
   return Array.isArray(p) ? p : [];
-}
+};
 
 function makeAdapter(engine: Engine): CommandAdapter<RObject> {
   const defIvars = defaultStringIvars(engine);
@@ -28,33 +27,33 @@ function makeAdapter(engine: Engine): CommandAdapter<RObject> {
     else holder[i] = RString.fromText(v, defIvars);
   };
   return {
-    code: (c) => numOf(c.get('code')) ?? 0,
-    indent: (c) => numOf(c.get('indent')) ?? 0,
-    param: (c, i) => {
-      const v = paramsOf(c)[i];
+    code: (cmd) => numOf(cmd.get('code')) ?? 0,
+    indent: (cmd) => numOf(cmd.get('indent')) ?? 0,
+    param: (cmd, i) => {
+      const v = paramsOf(cmd)[i];
       return v instanceof RString ? v.text : v;
     },
-    str: (c, i) => strOf(paramsOf(c)[i]),
-    setStr: (c, i, v) => setString(paramsOf(c), i, v),
-    arrLen: (c, i) => {
-      const a = paramsOf(c)[i];
+    str: (cmd, i) => strOf(paramsOf(cmd)[i]),
+    setStr: (cmd, i, v) => setString(paramsOf(cmd), i, v),
+    arrLen: (cmd, i) => {
+      const a = paramsOf(cmd)[i];
       return Array.isArray(a) ? a.length : 0;
     },
-    arrStr: (c, i, j) => {
-      const a = paramsOf(c)[i];
+    arrStr: (cmd, i, j) => {
+      const a = paramsOf(cmd)[i];
       return Array.isArray(a) ? strOf(a[j]) : undefined;
     },
-    setArrStr: (c, i, j, v) => {
-      const a = paramsOf(c)[i];
+    setArrStr: (cmd, i, j, v) => {
+      const a = paramsOf(cmd)[i];
       if (Array.isArray(a)) setString(a, j, v);
     },
     makeLine: (template, code, text) => {
       const tplParam = paramsOf(template)[0];
       const ivars = tplParam instanceof RString ? tplParam.meta?.ivars : defIvars;
       const cmd = new RObject(template.className);
+      // 保持与样板相同的实例变量顺序
       for (const k of template.ivars.keys()) {
         if (k === '@code') cmd.ivars.set(k, code);
-        else if (k === '@indent') cmd.ivars.set(k, template.get('indent') ?? 0);
         else if (k === '@parameters') cmd.ivars.set(k, [RString.fromText(text, ivars)]);
         else cmd.ivars.set(k, template.ivars.get(k) ?? null);
       }
@@ -63,37 +62,31 @@ function makeAdapter(engine: Engine): CommandAdapter<RObject> {
   };
 }
 
-function fileStem(path: string): string {
-  return (path.split(/[\\/]/).pop() ?? path).replace(/\.[^.]+$/, '');
-}
-
-function eventListOf(holder: RObject): RObject[] | undefined {
-  const list = holder.get('list');
+const listOf = (holder: unknown): RObject[] | undefined => {
+  const list = holder instanceof RObject ? holder.get('list') : undefined;
   return Array.isArray(list) ? (list as RObject[]) : undefined;
-}
+};
 
 export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument {
   let root: RValue;
   try {
     root = MarshalReader.load(bytes);
   } catch (e) {
-    if (e instanceof MarshalError) throw new UnsupportedFileError(`Marshal 解析失败：${e.message}`);
+    if (e instanceof MarshalError) throw new UnsupportedFileError('MARSHAL_INVALID', { detail: e.message });
     throw e;
   }
-  const engine = opts.engine;
+  const { engine } = opts;
   const xpStyle = engine === 'RMXP';
   const ad = makeAdapter(engine);
   const kind = detectKind(opts.path);
-  const kindLabel = KIND_LABELS[kind] ?? kind;
-  const stem = fileStem(opts.path);
+  const file = c.raw(fileStem(opts.path));
   const slots: Slot[] = [];
-  const warnings: string[] = [];
-  const ctx: WalkContext = { emit: (s) => slots.push(s), finalizers: [] };
+  const warnings: Issue[] = [];
+  const walk: WalkContext = { emit: (s) => slots.push(s), finalizers: [] };
   const defIvars = defaultStringIvars(engine);
 
-  const emitIvar = (obj: RObject, ivar: string, key: string, context: string, category: Slot['category'], danger = false) => {
-    const v = obj.get(ivar);
-    const text = strOf(v);
+  const emitIvar = (obj: RObject, ivar: string, key: string, context: ContextPart[], category: Slot['category'], danger = false) => {
+    const text = strOf(obj.get(ivar));
     if (!nonBlank(text)) return;
     slots.push({
       key,
@@ -108,67 +101,47 @@ export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument
       },
     });
   };
+  const events = (holder: unknown, keyPrefix: string, label: ContextPart[]) => {
+    const list = listOf(holder);
+    if (list) walkEventList(list, ad, { keyPrefix, label, xpStyle }, walk);
+  };
+  const idOf = (o: RObject) => numOf(o.get('id')) ?? 0;
+  const nameOf = (o: RObject) => strOf(o.get('name')) ?? '';
 
   if (kind === 'map' && root instanceof RObject) {
-    emitIvar(root, 'display_name', 'display_name', `${stem} · 地图显示名`, 'map');
-    emitIvar(root, 'note', 'note', `${stem} · 地图备注`, 'note', true);
-    const events = root.get('events');
-    if (events instanceof RHash) {
-      for (const [, ev] of events.entries) {
-        if (!(ev instanceof RObject)) continue;
-        const id = numOf(ev.get('id')) ?? 0;
-        const evLabel = `${stem} · 事件 #${id}「${strOf(ev.get('name')) ?? ''}」(${numOf(ev.get('x')) ?? '?'},${numOf(ev.get('y')) ?? '?'})`;
-        const pages = ev.get('pages');
-        if (!Array.isArray(pages)) continue;
-        pages.forEach((page, p) => {
-          if (!(page instanceof RObject)) return;
-          const list = eventListOf(page);
-          if (!list) return;
-          walkEventList(list, ad, { keyPrefix: `events/${id}/pages/${p}/list`, label: `${evLabel} · 第${p + 1}页`, xpStyle }, ctx);
-        });
-      }
+    emitIvar(root, 'display_name', 'display_name', [file, c.of('ctx.mapDisplayName')], 'map');
+    emitIvar(root, 'note', 'note', [file, c.of('ctx.mapNote')], 'note', true);
+    const evs = root.get('events');
+    for (const [, ev] of evs instanceof RHash ? evs.entries : []) {
+      if (!(ev instanceof RObject)) continue;
+      const id = idOf(ev);
+      const evPart = c.event(id, nameOf(ev), numOf(ev.get('x')), numOf(ev.get('y')));
+      const pages = ev.get('pages');
+      if (Array.isArray(pages)) pages.forEach((page, p) => events(page, `events/${id}/pages/${p}/list`, [file, evPart, c.page(p)]));
     }
   } else if (kind === 'common_events' && Array.isArray(root)) {
     for (const ce of root) {
-      if (!(ce instanceof RObject)) continue;
-      const list = eventListOf(ce);
-      if (!list) continue;
-      const id = numOf(ce.get('id')) ?? 0;
-      walkEventList(list, ad, { keyPrefix: `${id}/list`, label: `公共事件 #${id}「${strOf(ce.get('name')) ?? ''}」`, xpStyle }, ctx);
+      if (ce instanceof RObject) events(ce, `${idOf(ce)}/list`, [c.commonEvent(idOf(ce), nameOf(ce))]);
     }
   } else if (kind === 'troops' && Array.isArray(root)) {
     for (const tr of root) {
       if (!(tr instanceof RObject)) continue;
-      const id = numOf(tr.get('id')) ?? 0;
+      const id = idOf(tr);
       const pages = tr.get('pages');
-      if (!Array.isArray(pages)) continue;
-      pages.forEach((page, p) => {
-        if (!(page instanceof RObject)) return;
-        const list = eventListOf(page);
-        if (!list) return;
-        walkEventList(
-          list,
-          ad,
-          { keyPrefix: `${id}/pages/${p}/list`, label: `敌群 #${id}「${strOf(tr.get('name')) ?? ''}」· 第${p + 1}页`, xpStyle },
-          ctx,
-        );
-      });
+      if (Array.isArray(pages)) pages.forEach((page, p) => events(page, `${id}/pages/${p}/list`, [c.troop(id, nameOf(tr)), c.page(p)]));
     }
   } else if (kind === 'system' && root instanceof RObject) {
     walkSystem(root, slots, defIvars);
   } else if (kind === 'scripts' && Array.isArray(root)) {
-    walkScripts(root, slots, ctx, warnings);
+    walkScripts(root, slots, walk, warnings);
   } else if (DATABASE_FIELDS[kind] && Array.isArray(root)) {
     for (const row of root) {
       if (!(row instanceof RObject)) continue;
-      const id = numOf(row.get('id')) ?? 0;
-      const rowLabel = `${kindLabel} #${id}「${strOf(row.get('name')) ?? ''}」`;
-      for (const field of DATABASE_FIELDS[kind]) {
-        emitIvar(row, field.ivar, `${id}/${field.ivar}`, `${rowLabel} · ${field.label}`, field.category, field.danger);
-      }
+      const rowPart = c.row(kind, idOf(row), nameOf(row));
+      for (const f of DATABASE_FIELDS[kind]) emitIvar(row, f.ivar, `${idOf(row)}/${f.ivar}`, [rowPart, c.field(f.json)], f.category, f.danger);
     }
   } else if (kind === 'unknown') {
-    warnings.push('未识别的数据文件，未提取任何文本');
+    warnings.push({ code: 'UNKNOWN_FILE' });
   }
 
   return {
@@ -177,95 +150,96 @@ export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument
     slots,
     warnings,
     serialize: () => {
-      for (const fin of ctx.finalizers) fin();
-      ctx.finalizers.length = 0;
+      for (const fin of walk.finalizers.splice(0)) fin();
       return dump(root);
     },
   };
 }
 
+/** RGSS 实例变量名 → 位置说明键 */
 const SYSTEM_STRINGS: [string, string][] = [
-  ['game_title', '游戏标题'],
-  ['currency_unit', '货币单位'],
+  ['game_title', 'gameTitle'],
+  ['currency_unit', 'currencyUnit'],
 ];
 const SYSTEM_ARRAYS: [string, string][] = [
-  ['elements', '属性'],
-  ['skill_types', '技能类型'],
-  ['weapon_types', '武器类型'],
-  ['armor_types', '防具类型'],
+  ['elements', 'elements'],
+  ['skill_types', 'skillTypes'],
+  ['weapon_types', 'weaponTypes'],
+  ['armor_types', 'armorTypes'],
 ];
 
 function walkSystem(sys: RObject, slots: Slot[], defIvars: IvarList | undefined): void {
-  const pushStr = (holder: RValue[] | RObject, field: number | string, key: string, context: string) => {
-    const v = holder instanceof RObject ? holder.get(field as string) : holder[field as number];
-    const text = strOf(v);
+  const sysPart = c.of('ctx.system');
+  const get = (holder: RValue[] | RObject, field: number | string) => (holder instanceof RObject ? holder.get(field as string) : holder[field as number]);
+  const push = (holder: RValue[] | RObject, field: number | string, key: string, ...parts: ContextPart[]) => {
+    const text = strOf(get(holder, field));
     if (!nonBlank(text)) return;
     slots.push({
       key,
       original: text,
-      context,
+      context: [sysPart, ...parts],
       category: 'system',
       danger: false,
       set: (nv) => {
-        const cur = holder instanceof RObject ? holder.get(field as string) : holder[field as number];
+        const cur = get(holder, field);
         if (cur instanceof RString) cur.text = nv;
         else if (holder instanceof RObject) holder.set(field as string, RString.fromText(nv, defIvars));
         else holder[field as number] = RString.fromText(nv, defIvars);
       },
     });
   };
-  for (const [ivar, label] of SYSTEM_STRINGS) pushStr(sys, ivar, ivar, `系统 · ${label}`);
-  for (const [ivar, label] of SYSTEM_ARRAYS) {
+  for (const [ivar, k] of SYSTEM_STRINGS) push(sys, ivar, ivar, c.of(`ctx.sys.${k}`));
+  for (const [ivar, k] of SYSTEM_ARRAYS) {
     const arr = sys.get(ivar);
-    if (Array.isArray(arr)) arr.forEach((_, i) => pushStr(arr, i, `${ivar}/${i}`, `系统 · ${label} #${i}`));
+    if (Array.isArray(arr)) arr.forEach((_, i) => push(arr, i, `${ivar}/${i}`, c.of(`ctx.sys.${k}`, { i })));
   }
-  // VX/Ace：@terms；XP：@words。递归提取其中所有字符串
+  // VX/Ace 为 @terms，XP 为 @words：提取其中全部字符串
+  const termsPart = c.of('ctx.sys.terms');
   for (const ivar of ['terms', 'words']) {
     const holder = sys.get(ivar);
     if (!(holder instanceof RObject)) continue;
     for (const [k, v] of holder.ivars) {
       const name = k.replace(/^@/, '');
-      if (v instanceof RString) pushStr(holder, name, `${ivar}/${name}`, `系统 · 用语 · ${name}`);
-      else if (Array.isArray(v)) v.forEach((_, i) => pushStr(v, i, `${ivar}/${name}/${i}`, `系统 · 用语 · ${name} #${i}`));
+      if (v instanceof RString) push(holder, name, `${ivar}/${name}`, termsPart, c.raw(name));
+      else if (Array.isArray(v)) v.forEach((_, i) => push(v, i, `${ivar}/${name}/${i}`, termsPart, c.rawIndex(name, i)));
     }
   }
 }
 
 /** Scripts：[[id, name, zlib(code)], ...]，提取脚本中的字符串字面量 */
-function walkScripts(root: RValue[], slots: Slot[], ctx: WalkContext, warnings: string[]): void {
+function walkScripts(root: RValue[], slots: Slot[], walk: WalkContext, warnings: Issue[]): void {
   root.forEach((entry, index) => {
     if (!Array.isArray(entry) || entry.length < 3) return;
-    const nameStr = strOf(entry[1]) ?? '';
+    const name = strOf(entry[1]) ?? '';
     const codeObj = entry[2];
     if (!(codeObj instanceof RString)) return;
     let code: string;
     try {
       code = decodeUtf8(unzlibSync(codeObj.bytes));
     } catch {
-      warnings.push(`脚本 #${index}「${nameStr}」解压失败，已跳过`);
+      warnings.push({ code: 'SCRIPT_INFLATE_FAILED', params: { index, name } });
       return;
     }
     const literals = findRubyStrings(code);
     const replacements = new Map<number, string>();
+    const scriptPart = c.of('ctx.script', { index, name });
     literals.forEach((lit, n) => {
       slots.push({
         key: `${index}/${n}`,
         original: lit.content,
-        context: `脚本 #${index}「${nameStr}」· 第${lit.line}行`,
+        context: [scriptPart, c.of('ctx.line', { n: lit.line })],
         category: 'script',
         danger: true,
         set: (v) => replacements.set(n, escapeForQuote(v, lit.quote)),
       });
     });
-    ctx.finalizers.push(() => {
+    walk.finalizers.push(() => {
       if (!replacements.size) return;
       let out = code;
       // 从后往前替换，避免偏移变化
       for (let n = literals.length - 1; n >= 0; n--) {
         const rep = replacements.get(n);
-        if (rep === undefined) continue;
-        const lit = literals[n];
-        out = out.slice(0, lit.start) + rep + out.slice(lit.end);
+        if (rep !== undefined) out = out.slice(0, literals[n].start) + rep + out.slice(literals[n].end);
       }
       codeObj.bytes = zlibSync(encodeUtf8(out));
     });

@@ -7,9 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export const JOB_QUEUE = 'gametrans-jobs';
 
 export interface ParseUpload {
-  /** 存储目录内的临时文件 key */
+  /** 存储目录内的临时文件 */
   tmpKey: string;
-  /** 浏览器提交的相对路径（文件夹上传）或文件名 */
+  /** 浏览器提交的相对路径或文件名 */
   name: string;
 }
 
@@ -25,6 +25,13 @@ export interface ExportPayload {
   includeJson: boolean;
 }
 
+/** 任务失败原因；code 对应 i18n 的 issue.<code>，存入 Job.error */
+export class JobError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
 @Injectable()
 export class JobsService {
   constructor(
@@ -38,5 +45,33 @@ export class JobsService {
     });
     await this.queue.add(type, { jobId: job.id }, { removeOnComplete: 100, removeOnFail: 100, attempts: 1 });
     return job;
+  }
+
+  list(projectId: string, type?: string) {
+    return this.prisma.job.findMany({
+      where: { projectId, ...(type === 'PARSE' || type === 'EXPORT' ? { type } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        progress: true,
+        payload: true,
+        result: true,
+        error: true,
+        createdAt: true,
+        startedAt: true,
+        finishedAt: true,
+        createdBy: { select: { id: true, username: true, displayName: true } },
+      },
+    });
+  }
+
+  get(projectId: string, id: string) {
+    return this.prisma.job.findFirst({
+      where: { id, projectId },
+      select: { id: true, projectId: true, type: true, status: true, progress: true, result: true, error: true, createdAt: true, finishedAt: true },
+    });
   }
 }

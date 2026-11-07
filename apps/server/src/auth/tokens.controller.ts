@@ -1,21 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { DEFAULT_TOKEN_EXPIRY_DAYS, TOKEN_EXPIRY_DAYS, TOKEN_SCOPES, TokenScope } from '@gametrans/shared';
-import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { DEFAULT_TOKEN_EXPIRY_DAYS } from '@gametrans/shared';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser, SessionOnly } from '../common/decorators';
+import { CreateTokenDto } from './auth.dto';
 import { TokensService } from './tokens.service';
 import { TokenModel, CreatedTokenModel, OkModel } from '../common/api.models';
-
-export class CreateTokenDto {
-  /** 令牌名称，便于辨认用途，如「机翻脚本」 */
-  @IsString() @Length(1, 60, { message: '名称为 1-60 个字符' }) name: string;
-  /** READ：只读（仅 GET 请求）；WRITE：读写（本人角色允许的全部操作） */
-  @IsIn(TOKEN_SCOPES as unknown as string[], { message: '权限范围只能是 READ 或 WRITE' }) scope: TokenScope;
-  /** 有效期（天）：7 / 30 / 90 / 365，默认 90 */
-  @IsOptional() @IsIn(TOKEN_EXPIRY_DAYS as unknown as number[], { message: '有效期只能是 7、30、90 或 365 天' }) expiresInDays?: number;
-  /** 限定只能访问的项目 ID；不填表示本人参与的全部项目 */
-  @IsOptional() @IsString() projectId?: string;
-}
 
 /** 个人 API 令牌管理：只能在网页登录后操作，令牌本身不能用来管理令牌 */
 @SessionOnly()

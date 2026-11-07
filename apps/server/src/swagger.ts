@@ -20,14 +20,20 @@ RPG Maker 本地化协作平台的 REST API。所有接口都在 \`/api\` 下，
 - 令牌**不继承超级管理员权限**；管理令牌、修改密码与资料必须在网页登录后操作。
 - 有效期 7 / 30 / 90 / 365 天，可随时在网页中撤销。
 
+## 多语言
+
+错误提示、项目动态、词条位置说明按请求语言返回：\`Accept-Language\` 请求头 → 账号设置的界面语言 → 简体中文。目前支持 \`zh-CN\` 与 \`en\`。
+
 ## 错误
 
-出错时返回对应的 HTTP 状态码，响应体格式见 \`ErrorModel\`，例如 \`{"statusCode":403,"message":"没有权限执行此操作","error":"Forbidden"}\`。参数校验失败时 \`message\` 可能是字符串数组。
+出错时返回对应的 HTTP 状态码，响应体格式见 \`ErrorModel\`，例如 \`{"statusCode":403,"code":"FORBIDDEN","message":"没有权限执行此操作"}\`。程序判断请使用稳定的 \`code\`，\`message\` 会随语言变化。
 
+- 400：参数错误（\`VALIDATION_FAILED\`，\`params.field\` 为出错字段）
 - 401：未登录，或令牌无效 / 已过期
 - 403：没有权限（含只读令牌执行写操作、限定项目的令牌访问其他项目）
 - 404：资源不存在（私有项目对非成员也返回 404）
-- 409：冲突（如保存词条时 \`version\` 已过期，响应中的 \`current\` 为最新词条）
+- 409：冲突（如 \`ENTRY_CONFLICT\`：保存词条时 \`version\` 已过期，响应中的 \`current\` 为最新词条）
+- 413：\`FILE_TOO_LARGE\`，超过单个文件上传上限（\`params.limit\`，MB，见 \`GET /api/auth/config\`）
 
 ## 典型流程
 

@@ -47,7 +47,7 @@ services:
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
       PROJECT_CREATION: ${PROJECT_CREATION:-everyone}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      UPLOAD_LIMIT_MB: ${UPLOAD_LIMIT_MB:-512}
+      UPLOAD_LIMIT_MB: ${UPLOAD_LIMIT_MB:-2048}
     volumes:
       - appdata:/data
     ports:

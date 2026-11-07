@@ -10,10 +10,7 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-/**
- * Prisma 的 contains 会直接拼成 LIKE '%值%'，不会转义通配符；
- * 搜索 \C[2]、50%、a_b 这类文本前需要先转义 \ % _。
- */
+/** Prisma 的 contains 直接拼成 LIKE '%值%'，需先转义 \ % _ */
 export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, '\\$&');
 }

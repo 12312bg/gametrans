@@ -1,7 +1,8 @@
 import { Avatar, Tag, Tooltip } from 'antd';
-import { ENGINE_LABELS, Engine, ProjectRole, ROLE_LABELS, STAGE_LABELS, Stage, languageLabel } from '@gametrans/shared';
+import { ENGINE_NAMES, Engine, ProjectRole, Stage } from '@gametrans/shared';
 import { GlobalOutlined, LockOutlined } from '@ant-design/icons';
 import type { UserBrief } from '../api/types';
+import { useT } from '../i18n';
 import { colorFor } from '../utils';
 
 const STAGE_TAG_COLOR: Record<Stage, string> = {
@@ -23,34 +24,29 @@ export const STAGE_DOT: Record<Stage, string> = {
 };
 
 export function StageTag({ stage }: { stage: Stage }) {
+  const t = useT();
   return (
     <Tag color={STAGE_TAG_COLOR[stage]} bordered={false} style={stage === 'HIDDEN' ? { opacity: 0.7 } : undefined}>
-      {STAGE_LABELS[stage]}
+      {t(`stage.${stage}`)}
     </Tag>
   );
 }
 
 export function StageDot({ stage }: { stage: Stage }) {
+  const t = useT();
   return (
-    <Tooltip title={STAGE_LABELS[stage]}>
+    <Tooltip title={t(`stage.${stage}`)}>
       <span className="stage-dot" style={{ background: STAGE_DOT[stage] }} />
     </Tooltip>
   );
 }
 
-const ENGINE_COLORS: Record<Engine, string> = {
-  RMXP: 'geekblue',
-  RMVX: 'cyan',
-  RMVXACE: 'purple',
-  RMMV: 'volcano',
-  RMMZ: 'magenta',
-};
-
+const ENGINE_COLORS: Record<Engine, string> = { RMXP: 'geekblue', RMVX: 'cyan', RMVXACE: 'purple', RMMV: 'volcano', RMMZ: 'magenta' };
 const ENGINE_SHORT: Record<Engine, string> = { RMXP: 'XP', RMVX: 'VX', RMVXACE: 'VX Ace', RMMV: 'MV', RMMZ: 'MZ' };
 
 export function EngineTag({ engine }: { engine: Engine }) {
   return (
-    <Tooltip title={ENGINE_LABELS[engine]}>
+    <Tooltip title={ENGINE_NAMES[engine]}>
       <Tag color={ENGINE_COLORS[engine]} bordered={false} style={{ fontWeight: 600 }}>
         RM {ENGINE_SHORT[engine]}
       </Tag>
@@ -58,38 +54,31 @@ export function EngineTag({ engine }: { engine: Engine }) {
   );
 }
 
-const ROLE_COLORS: Record<ProjectRole, string> = {
-  OWNER: 'gold',
-  ADMIN: 'red',
-  REVIEWER: 'green',
-  TRANSLATOR: 'blue',
-  VIEWER: 'default',
-};
+const ROLE_COLORS: Record<ProjectRole, string> = { OWNER: 'gold', ADMIN: 'red', REVIEWER: 'green', TRANSLATOR: 'blue', VIEWER: 'default' };
 
 export function RoleTag({ role }: { role: ProjectRole }) {
+  const t = useT();
   return (
     <Tag color={ROLE_COLORS[role]} bordered={false}>
-      {ROLE_LABELS[role]}
+      {t(`role.${role}`)}
     </Tag>
   );
 }
 
 export function LangPair({ source, target }: { source: string; target: string }) {
+  const t = useT();
   return (
     <span className="lang-pair">
-      {languageLabel(source)} <span className="lang-arrow">→</span> {languageLabel(target)}
+      {t(`lang.${source}`)} <span className="lang-arrow">→</span> {t(`lang.${target}`)}
     </span>
   );
 }
 
 export function VisibilityTag({ visibility }: { visibility: 'PUBLIC' | 'PRIVATE' }) {
-  return visibility === 'PUBLIC' ? (
-    <Tag icon={<GlobalOutlined />} bordered={false}>
-      公开
-    </Tag>
-  ) : (
-    <Tag icon={<LockOutlined />} bordered={false} color="default">
-      私有
+  const t = useT();
+  return (
+    <Tag icon={visibility === 'PUBLIC' ? <GlobalOutlined /> : <LockOutlined />} bordered={false}>
+      {t(`visibility.${visibility}`)}
     </Tag>
   );
 }

@@ -70,6 +70,8 @@ model User {
   bio          String   @default("")
   isSuperAdmin Boolean  @default(false)
   isBanned     Boolean  @default(false)
+  /// 界面语言（zh-CN / en），为空时按浏览器语言
+  locale       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -174,7 +176,8 @@ model File {
   storageKey String
   size       Int
   sha256     String
-  warnings   String[] @default([])
+  /// 解析提示 [{ code, params }]
+  warnings   Json     @default("[]")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -185,22 +188,25 @@ model File {
 }
 
 model Entry {
-  id           String   @id @default(cuid())
-  projectId    String
-  fileId       String
-  key          String
-  original     String
-  translation  String   @default("")
-  context      String   @default("")
-  category     String
-  danger       Boolean  @default(false)
-  stage        Stage    @default(UNTRANSLATED)
-  sortOrder    Int
-  version      Int      @default(0)
-  translatorId String?
-  reviewerId   String?
-  updatedAt    DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  projectId     String
+  fileId        String
+  key           String
+  original      String
+  translation   String   @default("")
+  /// 结构化位置说明 [{ k, p }]；旧数据为空，由后台任务从原文件补齐
+  contextData   Json?
+  /// 位置说明中的名称等参数，用于搜索；旧数据为原中文位置说明
+  contextSearch String   @default("")
+  category      String
+  danger        Boolean  @default(false)
+  stage         Stage    @default(UNTRANSLATED)
+  sortOrder     Int
+  version       Int      @default(0)
+  translatorId  String?
+  reviewerId    String?
+  updatedAt     DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file       File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -279,7 +285,9 @@ model Activity {
   projectId String
   userId    String?
   type      String
-  message   String
+  /// 渲染参数；旧数据为空，只有 message
+  params    Json?
+  message   String   @default("")
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

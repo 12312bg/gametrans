@@ -1,16 +1,18 @@
+import './i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ApiError } from './api/client';
 import App from './App';
-import { AuthProvider } from './auth';
-import { ThemeProvider } from './theme';
+import { AuthProvider } from './providers/AuthProvider';
+import { ThemeProvider } from './providers/ThemeProvider';
 import './styles.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      // 4xx 不重试
       retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
       refetchOnWindowFocus: false,
       staleTime: 10_000,

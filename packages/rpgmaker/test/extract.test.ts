@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Engine } from '@gametrans/shared';
+import { formatContext, hasMessage, translate } from '@gametrans/shared';
+import type { ContextPart, Engine } from '@gametrans/shared';
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyTranslations, extractEntries, findRubyStrings, normalizeGamePath } from '../src';
+import { UnsupportedFileError, applyTranslations, extractEntries, findRubyStrings } from '../src';
+
+const zh = (parts: ContextPart[]) => formatContext(parts, (k, p) => translate('zh-CN', k, p));
+const en = (parts: ContextPart[]) => formatContext(parts, (k, p) => translate('en', k, p));
 
 const rgss = (f: string) => new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'rgss', f)));
 const mz = (f: string) => new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'mz', f)));
@@ -31,7 +36,8 @@ describe.each([
       expect(dialogue.original).toBe('こんにちは、旅の人。\nこの村へようこそ！');
     } else {
       expect(dialogue.original).toBe('こんにちは、旅の人。\n\\C[2]この村\\C[0]へようこそ！');
-      expect(dialogue.context).toContain('脸图 Actor1');
+      expect(zh(dialogue.context)).toBe('Map001 · 事件 #1「村人A」(3,4) · 第1页 · 显示文章（脸图 Actor1(0)）');
+      expect(en(dialogue.context)).toBe('Map001 · Event #1 "村人A" (3,4) · Page 1 · Show Text (face Actor1(0))');
     }
     expect(entries.filter((e) => e.category === 'choice').map((e) => e.original)).toEqual(['はい', 'いいえ']);
     expect(entries.find((e) => e.category === 'name')?.original).toBe('アレックス');
@@ -209,19 +215,54 @@ describe('MV/MZ', () => {
   });
 });
 
-describe('路径规范化', () => {
-  it.each([
-    ['MyGame/www/data/Map001.json', 'RMMV', 'www/data/Map001.json'],
-    ['MyGame/data/Map001.json', 'RMMZ', 'data/Map001.json'],
-    ['MyGame/js/plugins.js', 'RMMZ', 'js/plugins.js'],
-    ['MyGame/js/plugins/Foo.js', 'RMMZ', null],
-    ['MyGame/img/a.json', 'RMMZ', null],
-    ['Map002.json', 'RMMZ', 'data/Map002.json'],
-    ['Game/Data/Map001.rvdata2', 'RMVXACE', 'Data/Map001.rvdata2'],
-    ['Game/data/Actors.rxdata', 'RMXP', 'Data/Actors.rxdata'],
-    ['Game/Data/Actors.rvdata', 'RMVXACE', null],
-    ['__MACOSX/Data/Map001.rvdata2', 'RMVXACE', null],
-  ] as [string, Engine, string | null][])('%s (%s)', (input, engine, expected) => {
-    expect(normalizeGamePath(input, engine)).toBe(expected);
+describe('结构化位置说明与错误码', () => {
+  const all: [string, Uint8Array, Engine][] = [
+    ...readdirSync(join(__dirname, 'fixtures', 'rgss'))
+      .filter((f) => /\.(rxdata|rvdata2?)$/.test(f))
+      .map((f): [string, Uint8Array, Engine] => [`Data/${f}`, rgss(f), f.endsWith('rxdata') ? 'RMXP' : f.endsWith('rvdata') ? 'RMVX' : 'RMVXACE']),
+    ...readdirSync(join(__dirname, 'fixtures', 'mz'))
+      .filter((f) => /\.(json|js)$/.test(f))
+      .map((f): [string, Uint8Array, Engine] => [f === 'plugins.js' ? 'js/plugins.js' : `data/${f}`, mz(f), 'RMMZ']),
+  ];
+
+  it('所有位置说明的键都在语言包中', () => {
+    for (const [path, bytes, engine] of all) {
+      for (const e of extractEntries(path, bytes, engine).entries) {
+        for (const part of e.context) expect(hasMessage(part.k), `${path} ${e.key} ${part.k}`).toBe(true);
+      }
+    }
+  });
+
+  it('MZ 姓名框与插件参数', () => {
+    const { entries } = extractEntries('data/Map001.json', mz('Map001.json'), 'RMMZ');
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e]));
+    expect(zh(byKey['events/1/pages/0/list/0'].context)).toContain('显示文章（脸图 Actor1(0) · 说话人 リード）');
+    expect(zh(byKey['events/1/pages/0/list/16/struct/title'].context)).toBe(
+      'Map001 · 事件 #1「村人A」(3,4) · 第1页 · 插件指令 TextPlugin:show · 参数「struct」 › title',
+    );
+    const { entries: plugins } = extractEntries('js/plugins.js', mz('plugins.js'), 'RMMZ');
+    expect(en(plugins.find((e) => e.original === '開始')!.context)).toBe('Plugin TitleCommand · Parameter "Items" › #1 › label');
+  });
+
+  it('脚本位置说明', () => {
+    const { entries } = extractEntries('Data/Scripts.rvdata2', rgss('Scripts.rvdata2'), 'RMVXACE');
+    expect(zh(entries.find((e) => e.original === '購入する')!.context)).toBe('脚本 #0「Vocab」 · 第6行');
+  });
+
+  it('无法解析的文件抛出带错误码的异常', () => {
+    const codeOf = (fn: () => unknown): [string, unknown] | undefined => {
+      try {
+        fn();
+      } catch (e) {
+        if (e instanceof UnsupportedFileError) return [e.code, e.params];
+        throw e;
+      }
+      return undefined;
+    };
+    expect(codeOf(() => extractEntries('data/Map001.json', new TextEncoder().encode('{bad'), 'RMMZ'))?.[0]).toBe('JSON_INVALID');
+    expect(codeOf(() => extractEntries('Data/Map001.rvdata2', new Uint8Array([4, 8, 0xff]), 'RMVXACE'))?.[0]).toBe('MARSHAL_INVALID');
+    expect(codeOf(() => extractEntries('Data/Map001.rxdata', rgss('Map001.rvdata2'), 'RMVXACE'))).toEqual(['WRONG_EXTENSION', { ext: '.rvdata2' }]);
+    expect(codeOf(() => extractEntries('js/foo.js', new Uint8Array(), 'RMMZ'))?.[0]).toBe('MVMZ_UNSUPPORTED');
+    expect(codeOf(() => extractEntries('js/plugins.js', new TextEncoder().encode('var x = 1;'), 'RMMZ'))?.[0]).toBe('PLUGINS_NOT_FOUND');
   });
 });

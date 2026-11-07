@@ -1,0 +1,59 @@
+# 一键部署：docker compose up -d --build
+# 仅启动数据库（本地开发用）：docker compose up -d postgres redis
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gametrans
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gametrans}
+      POSTGRES_DB: gametrans
+      # 翻译记忆的中日韩模糊匹配依赖 UTF-8 的 LC_CTYPE
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gametrans"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://gametrans:${POSTGRES_PASSWORD:-gametrans}@postgres:5432/gametrans
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      PROJECT_CREATION: ${PROJECT_CREATION:-everyone}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      UPLOAD_LIMIT_MB: ${UPLOAD_LIMIT_MB:-512}
+    volumes:
+      - appdata:/data
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:

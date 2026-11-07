@@ -12,7 +12,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { AccessService, ProjectContext } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
-import { chunk, pageParams } from '../common/pagination';
+import { chunk, escapeLike, pageParams } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface EntryFilter {
@@ -86,7 +86,7 @@ export class EntriesService {
     if (f.translatorId) and.push({ translatorId: f.translatorId });
     const q = f.q?.trim() ? f.q : undefined;
     if (q) {
-      const c = { contains: q, mode: 'insensitive' as const };
+      const c = { contains: escapeLike(q), mode: 'insensitive' as const };
       switch (f.field) {
         case 'original':
           and.push({ original: c });

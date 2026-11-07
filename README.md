@@ -59,6 +59,7 @@ gametrans/
 │       ├── src/mvmz/            #   MV/MZ JSON 与 plugins.js
 │       ├── src/events.ts        #   事件指令遍历（两类引擎共用）
 │       └── test/                #   测试与夹具（Ruby 生成的 RGSS 数据、MV/MZ JSON）
+├── e2e/                         # Playwright 浏览器端到端测试
 ├── docker-compose.yml
 └── Dockerfile
 ```
@@ -106,10 +107,39 @@ pnpm dev:web
 | 命令 | 说明 |
 | --- | --- |
 | `pnpm test` | 运行解析库测试（Marshal 往返、提取、回写、路径识别） |
+| `pnpm test:e2e` | 构建后运行浏览器端到端测试（见下文） |
 | `pnpm typecheck` | 全部包类型检查 |
 | `pnpm build` | 构建全部包 |
 | `pnpm db:migrate` | 修改 `schema.prisma` 后生成新迁移 |
 | `pnpm --filter @gametrans/rpgmaker fixtures` | 用 Ruby 重新生成 RGSS 测试数据（需要安装 Ruby） |
+
+### 端到端测试
+
+`e2e/` 是基于 Playwright 的浏览器测试，以生产模式启动服务（后端托管构建后的前端）。测试覆盖：
+
+- 注册与登录、项目创建与上传（zip / 文件夹 / 单文件）
+- 加入申请与邀请、各角色的权限边界
+- 翻译编辑器：快捷键、控制符检查、翻译记忆、术语、批量操作、锁定、历史回滚、并发冲突、上下文跳转
+- 文件更新与导出校验、XP/VX/Ace 数据回写（若本机装有 Ruby，会用 Ruby 加载校验）
+- 项目设置、转让与删除、管理后台、深色模式、手机布局
+
+每个用例都会断言页面没有 JS 异常和控制台错误。
+
+```bash
+# 需要本机运行 PostgreSQL 与 Redis（同本地开发），首次运行前创建测试库
+createdb -O gametrans gametrans_e2e      # 或在 psql 中 CREATE DATABASE gametrans_e2e OWNER gametrans;
+pnpm test:e2e
+```
+
+测试使用独立的数据库 `gametrans_e2e`（需预先创建，启动时自动执行 `prisma migrate deploy`）、Redis 1 号库和 `e2e/.tmp/` 存储目录，不会影响开发数据。数据库不会被清空，各用例使用随机命名的用户和项目互相隔离。以下变量可以覆盖默认值：
+
+| 变量 | 默认值 |
+| --- | --- |
+| `E2E_DATABASE_URL` | `postgresql://gametrans:gametrans@localhost:5432/gametrans_e2e` |
+| `E2E_REDIS_URL` | `redis://localhost:6379/1` |
+| `E2E_PORT` | `3100` |
+
+测试报告位于 `e2e/.tmp/report`，可用 `pnpm --filter @gametrans/e2e report` 打开。
 
 ## 环境变量（后端）
 

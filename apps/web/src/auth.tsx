@@ -26,8 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ['me'] }), [qc]);
   const logout = useCallback(async () => {
     await api('/auth/logout', { method: 'POST' });
-    qc.clear();
-    await qc.invalidateQueries({ queryKey: ['me'] });
+    // 直接置空登录态；qc.clear() 之后再 invalidate 不会通知仍在使用旧数据的组件
+    qc.setQueryData(['me'], null);
+    qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' && q.queryKey[0] !== 'site-config' });
   }, [qc]);
   return (
     <AuthContext.Provider value={{ user: me.data ?? null, loading: me.isLoading, site: site.data, refresh, logout }}>

@@ -2,7 +2,7 @@ import { BadRequestException, Body, ConflictException, Controller, ForbiddenExce
 import { IsBoolean, IsEmail, IsOptional, IsString, Length } from 'class-validator';
 import { AuthService, PUBLIC_USER_SELECT } from '../auth/auth.service';
 import { AuthUser, CurrentUser } from '../common/decorators';
-import { pageParams } from '../common/pagination';
+import { escapeLike, pageParams } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 
 class UpdateMeDto {
@@ -52,7 +52,7 @@ export class UsersController {
   /** 邀请成员时的用户搜索 */
   @Get('users/search')
   search(@Query('q') q = '') {
-    const term = q.trim();
+    const term = escapeLike(q.trim());
     if (!term) return [];
     return this.prisma.user.findMany({
       where: {
@@ -112,12 +112,13 @@ export class UsersController {
   async adminUsers(@CurrentUser() user: AuthUser, @Query('q') q = '', @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     this.ensureAdmin(user);
     const { skip, take, ...p } = pageParams(page, pageSize);
-    const where = q.trim()
+    const like = escapeLike(q.trim());
+    const where = like
       ? {
           OR: [
-            { username: { contains: q.trim(), mode: 'insensitive' as const } },
-            { email: { contains: q.trim(), mode: 'insensitive' as const } },
-            { displayName: { contains: q.trim(), mode: 'insensitive' as const } },
+            { username: { contains: like, mode: 'insensitive' as const } },
+            { email: { contains: like, mode: 'insensitive' as const } },
+            { displayName: { contains: like, mode: 'insensitive' as const } },
           ],
         }
       : {};

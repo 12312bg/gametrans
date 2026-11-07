@@ -15,6 +15,7 @@
     "test": "pnpm --filter @gametrans/rpgmaker test",
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @gametrans/server prisma:migrate",
-    "db:deploy": "pnpm --filter @gametrans/server prisma:deploy"
+    "db:deploy": "pnpm --filter @gametrans/server prisma:deploy",
+    "test:e2e": "pnpm build && pnpm --filter @gametrans/e2e test"
   }
 }

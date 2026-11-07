@@ -16,7 +16,7 @@ import { IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { AccessService } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
-import { pageParams } from '../common/pagination';
+import { escapeLike, pageParams } from '../common/pagination';
 import { StorageService } from '../common/storage.service';
 import { config } from '../config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -97,10 +97,11 @@ export class ProjectsController {
       and.push({ visibility: 'PUBLIC' });
     }
     if (q.trim()) {
+      const like = escapeLike(q.trim());
       and.push({
         OR: [
-          { name: { contains: q.trim(), mode: 'insensitive' } },
-          { description: { contains: q.trim(), mode: 'insensitive' } },
+          { name: { contains: like, mode: 'insensitive' } },
+          { description: { contains: like, mode: 'insensitive' } },
         ],
       });
     }

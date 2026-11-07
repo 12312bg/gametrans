@@ -1,0 +1,19 @@
+{
+  "name": "@gametrans/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "浏览器端到端测试（Playwright）",
+  "scripts": {
+    "test": "playwright test --trace off",
+    "report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@gametrans/rpgmaker": "workspace:*",
+    "@gametrans/shared": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.10.2",
+    "fflate": "0.8.2",
+    "typescript": "5.9.3"
+  }
+}

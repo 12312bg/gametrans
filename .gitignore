@@ -7,3 +7,4 @@ coverage/
 .DS_Store
 *.log
 apps/web/dist/
+e2e/.tmp/

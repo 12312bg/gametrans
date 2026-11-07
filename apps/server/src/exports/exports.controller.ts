@@ -4,6 +4,7 @@ import { ArrayNotEmpty, IsArray, IsBoolean, IsIn, IsOptional, IsString } from 'c
 import type { Response } from 'express';
 import { AccessService } from '../common/access.service';
 import { AuthUser, CurrentUser } from '../common/decorators';
+import { attachment } from '../common/http';
 import { StorageService } from '../common/storage.service';
 import type { ExportResult } from '../jobs/export.service';
 import { JobsService } from '../jobs/jobs.service';
@@ -66,7 +67,7 @@ export class ExportsController {
     if (!result?.storageKey || !(await this.storage.exists(result.storageKey))) throw new NotFoundException('导出包不存在或已删除');
     res.set({
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(result.fileName)}`,
+      'Content-Disposition': attachment(result.fileName),
       'Content-Length': String(result.size),
     });
     return new StreamableFile(this.storage.stream(result.storageKey));

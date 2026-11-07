@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { AccessService } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
+import { attachment } from '../common/http';
 import { StorageService } from '../common/storage.service';
 import { config } from '../config';
 import { JobsService } from '../jobs/jobs.service';
@@ -155,7 +156,7 @@ export class FilesController {
     const name = file.path.split('/').pop() ?? 'file';
     res.set({
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+      'Content-Disposition': attachment(name),
     });
     return new StreamableFile(this.storage.stream(file.storageKey));
   }

@@ -46,8 +46,11 @@ async function downloadExport(page: Page, expectRows?: number) {
   if (expectRows !== undefined) await expect(page.locator('.ant-table-row')).toHaveCount(expectRows);
   const row = page.locator('.ant-table-row').first();
   await expect(row).toContainText('完成', { timeout: 30_000 });
-  const [dl] = await Promise.all([page.waitForEvent('download'), row.getByRole('link', { name: label('下载') }).click()]);
-  expect(dl.suggestedFilename()).toMatch(/_zh-CN_\d+\.zip$/);
+  const link = row.getByRole('link', { name: label('下载') });
+  // 测试用 headless Chromium 无法解析含非 ASCII 字符的 filename*，因此直接校验响应头（RFC 6266）
+  const head = await page.request.get((await link.getAttribute('href'))!);
+  expect(head.headers()['content-disposition']).toMatch(/^attachment; filename="[\x20-\x7e]+_zh-CN_\d+\.zip"; filename\*=UTF-8''\S+_zh-CN_\d+\.zip$/);
+  const [dl] = await Promise.all([page.waitForEvent('download'), link.click()]);
   const zip = unzipSync(new Uint8Array(readFileSync((await dl.path())!)));
   return zip;
 }

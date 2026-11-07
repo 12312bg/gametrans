@@ -106,7 +106,14 @@ test('导出：默认状态 + 附带 JSON，译文正确写回', async ({ page }
 test('导出：只写入已审核的译文', async ({ page }) => {
   await useAs(page, owner);
   await page.goto(`/projects/${pid}/exports`);
-  for (const s of ['已翻译', '有疑问', '已锁定']) await page.getByRole('checkbox', { name: s }).uncheck();
+  for (const s of ['已翻译', '有疑问', '已锁定']) {
+    const cb = page.getByRole('checkbox', { name: s });
+    // 连续快速点击时 AntD 复选框偶尔会吞掉一次点击，带重试并确认状态
+    await expect(async () => {
+      if (await cb.isChecked()) await cb.click();
+      await expect(cb).not.toBeChecked({ timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
+  }
   await expect(page.locator('.ant-table-row')).toHaveCount(1);
   await btn(page, '生成导出包').click();
   const zip = await downloadExport(page, 2);

@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const site = useQuery({ queryKey: ['site-config'], queryFn: () => api<SiteConfig>('/auth/config'), staleTime: Infinity });
   const user = me.data ?? null;
 
-  useEffect(() => setUploadLimit(site.data?.uploadLimitMb), [site.data]);
+  useEffect(() => void setUploadLimit(site.data?.uploadLimitMb), [site.data]);
 
   // 账号里保存的语言优先；首次登录时把当前语言记到账号
   useEffect(() => {
@@ -46,7 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
   const setLanguage = useCallback(
     (locale: Locale) => {
-      applyLocale(locale);
+      // 服务端返回的文本（错误、位置说明等）按新语言重新获取
+      void applyLocale(locale).then(() => qc.invalidateQueries());
       if (user) {
         qc.setQueryData<Me | null>(['me'], (m) => (m ? { ...m, locale } : m));
         void saveLocale(locale);

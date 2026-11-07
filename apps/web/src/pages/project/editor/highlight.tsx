@@ -1,7 +1,7 @@
 import { Tooltip } from 'antd';
 import { CONTROL_CODE_REGEX } from '@gametrans/shared';
 import { ReactNode } from 'react';
-import type { Term } from '../api/types';
+import type { Term } from '../../../api/types';
 
 interface Range {
   start: number;

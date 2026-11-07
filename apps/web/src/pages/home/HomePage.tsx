@@ -1,15 +1,17 @@
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Button, Col, Empty, Input, Pagination, Row, Segmented, Select, Skeleton } from 'antd';
-import { ENGINES, ENGINE_LABELS } from '@gametrans/shared';
+import { ENGINES, ENGINE_NAMES } from '@gametrans/shared';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, qs } from '../api/client';
-import type { Paged, ProjectSummary } from '../api/types';
-import { useAuth } from '../auth';
-import { ProjectCard } from '../components/ProjectCard';
+import { api, qs } from '../../api/client';
+import type { Paged, ProjectSummary } from '../../api/types';
+import { ProjectCard } from '../../components/ProjectCard';
+import { useT } from '../../i18n';
+import { useAuth } from '../../providers/AuthProvider';
 
 export default function HomePage() {
+  const t = useT();
   const { user, site } = useAuth();
   const nav = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -36,28 +38,30 @@ export default function HomePage() {
   });
 
   const canCreate = user && (site?.projectCreation !== 'superadmin' || user.isSuperAdmin);
+  const createBtn = (props: { size?: 'large'; style?: React.CSSProperties }) =>
+    canCreate && (
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => nav('/projects/new')} {...props}>
+        {t('nav.newProject')}
+      </Button>
+    );
 
   return (
     <div>
       <section className="hero">
         <div className="hero-inner">
-          <h1>RPG Maker 游戏本地化协作平台</h1>
-          <p>支持 XP · VX · VX Ace · MV · MZ。上传数据文件，在线协作翻译与审核，一键导出可直接覆盖的游戏文件。</p>
+          <h1>{t('home.heroTitle')}</h1>
+          <p>{t('home.heroDesc')}</p>
           <div className="hero-search">
             <Input
               size="large"
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="搜索项目名称或简介"
+              placeholder={t('home.search')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onPressEnter={() => set({ q: search.trim() || undefined })}
             />
-            {canCreate && (
-              <Button size="large" type="primary" icon={<PlusOutlined />} onClick={() => nav('/projects/new')}>
-                新建项目
-              </Button>
-            )}
+            {createBtn({ size: 'large' })}
           </div>
         </div>
       </section>
@@ -68,18 +72,18 @@ export default function HomePage() {
             value={scope}
             onChange={(v) => set({ scope: String(v) })}
             options={[
-              ...(user ? [{ label: '我参与的', value: 'mine' }] : []),
-              { label: '公开项目', value: 'public' },
-              ...(user?.isSuperAdmin ? [{ label: '全部项目', value: 'all' }] : []),
+              ...(user ? [{ label: t('home.scope.mine'), value: 'mine' }] : []),
+              { label: t('home.scope.public'), value: 'public' },
+              ...(user?.isSuperAdmin ? [{ label: t('home.scope.all'), value: 'all' }] : []),
             ]}
           />
           <Select
             allowClear
-            placeholder="全部引擎"
+            placeholder={t('home.allEngines')}
             style={{ width: 180 }}
             value={engine || undefined}
             onChange={(v) => set({ engine: v })}
-            options={ENGINES.map((e) => ({ label: ENGINE_LABELS[e], value: e }))}
+            options={ENGINES.map((e) => ({ label: ENGINE_NAMES[e], value: e }))}
           />
         </div>
 
@@ -93,17 +97,9 @@ export default function HomePage() {
           </Row>
         ) : !list.data?.items.length ? (
           <div className="empty-block">
-            <Empty
-              description={scope === 'mine' ? '你还没有参与任何项目' : q ? '没有找到匹配的项目' : '还没有公开项目'}
-            >
-              {scope === 'mine' && (
-                <Button onClick={() => set({ scope: 'public' })}>浏览公开项目</Button>
-              )}
-              {canCreate && (
-                <Button type="primary" style={{ marginLeft: 8 }} onClick={() => nav('/projects/new')}>
-                  新建项目
-                </Button>
-              )}
+            <Empty description={t(scope === 'mine' ? 'home.emptyMine' : q ? 'home.emptySearch' : 'home.emptyPublic')}>
+              {scope === 'mine' && <Button onClick={() => set({ scope: 'public' })}>{t('home.browsePublic')}</Button>}
+              {createBtn({ style: { marginLeft: 8 } })}
             </Empty>
           </div>
         ) : (
@@ -117,13 +113,7 @@ export default function HomePage() {
             </Row>
             {list.data.total > list.data.pageSize && (
               <div className="pager">
-                <Pagination
-                  current={page}
-                  pageSize={list.data.pageSize}
-                  total={list.data.total}
-                  onChange={(pg) => set({ page: String(pg) })}
-                  showSizeChanger={false}
-                />
+                <Pagination current={page} pageSize={list.data.pageSize} total={list.data.total} onChange={(pg) => set({ page: String(pg) })} showSizeChanger={false} />
               </div>
             )}
           </>

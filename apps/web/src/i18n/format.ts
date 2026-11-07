@@ -1,4 +1,4 @@
-import { ContextPart, Issue, formatActivity, formatContext, hasMessage } from '@gametrans/shared';
+import { ContextPart, Issue, LANGUAGE_CODES, formatActivity, formatContext, hasMessage } from '@gametrans/shared';
 import type { TFn } from '.';
 
 /** 词条位置说明：优先用结构化数据按当前语言渲染，旧数据回退为服务端文本 */
@@ -28,3 +28,5 @@ export function activityText(a: { type: string; params?: Record<string, string |
 export function historyNote(action: string, note: string, t: TFn): string {
   return action === 'BATCH' && hasMessage(`batch.${note}`) ? t(`batch.${note}`) : note;
 }
+
+export const langOptions = (t: TFn) => LANGUAGE_CODES.map((code) => ({ label: t('common.langOption', { name: t(`lang.${code}`), code }), value: code }));

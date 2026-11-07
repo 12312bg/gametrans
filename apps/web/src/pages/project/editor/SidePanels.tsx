@@ -1,36 +1,46 @@
 import { RollbackOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Empty, List, Popconfirm, Space, Spin, Tag, Tooltip, Typography } from 'antd';
-import { HISTORY_ACTION_LABELS, HistoryAction } from '@gametrans/shared';
-import { api } from '../api/client';
-import type { Entry, HistoryItem, Neighbor, Suggestion, Term } from '../api/types';
-import { StageDot, StageTag, UserAvatar } from '../components/Tags';
-import { formatTime, fromNow } from '../utils';
+import { hasMessage } from '@gametrans/shared';
+import { api } from '../../../api/client';
+import type { Entry, HistoryItem, Neighbor, Suggestion, Term } from '../../../api/types';
+import { StageDot, StageTag, UserAvatar } from '../../../components/Tags';
+import { useT } from '../../../i18n';
+import { historyNote } from '../../../i18n/format';
+import { formatTime, fromNow } from '../../../utils';
 import { CodesOnly } from './highlight';
 
+const Loading = () => (
+  <div className="center-spin small">
+    <Spin size="small" />
+  </div>
+);
+const Nothing = ({ text }: { text: string }) => <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={text} />;
+
 export function TermsTab({ matched, onInsert, canEdit }: { matched: Term[]; onInsert: (t: string) => void; canEdit: boolean }) {
-  if (!matched.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="原文中没有命中术语" />;
+  const t = useT();
+  if (!matched.length) return <Nothing text={t('side.noTerms')} />;
   return (
     <List
       size="small"
       dataSource={matched}
-      renderItem={(t) => (
+      renderItem={(term) => (
         <List.Item
           actions={
             canEdit
               ? [
-                  <Button key="ins" size="small" type="link" onClick={() => onInsert(t.translation)}>
-                    插入
+                  <Button key="ins" size="small" type="link" onClick={() => onInsert(term.translation)}>
+                    {t('side.insert')}
                   </Button>,
                 ]
               : undefined
           }
         >
           <div className="term-row">
-            <span className="term-src">{t.term}</span>
+            <span className="term-src">{term.term}</span>
             <span className="term-arrow">→</span>
-            <b>{t.translation}</b>
-            {t.note && <div className="muted small">{t.note}</div>}
+            <b>{term.translation}</b>
+            {term.note && <div className="muted small">{term.note}</div>}
           </div>
         </List.Item>
       )}
@@ -39,13 +49,14 @@ export function TermsTab({ matched, onInsert, canEdit }: { matched: Term[]; onIn
 }
 
 export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entry; onUse: (t: string) => void; canEdit: boolean }) {
+  const t = useT();
   const q = useQuery({
     queryKey: ['suggestions', entry.id, entry.original],
     queryFn: () => api<Suggestion[]>(`/projects/${pid}/entries/${entry.id}/suggestions`),
     staleTime: 60_000,
   });
-  if (q.isLoading) return <div className="center-spin small"><Spin size="small" /></div>;
-  if (!q.data?.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有相似的已有译文" />;
+  if (q.isLoading) return <Loading />;
+  if (!q.data?.length) return <Nothing text={t('side.noTm')} />;
   return (
     <List
       size="small"
@@ -59,7 +70,7 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
                 ? [
                     <Tooltip key="use" title={i < 5 ? `Alt+${i + 1}` : undefined}>
                       <Button size="small" type="link" onClick={() => onUse(s.translation)}>
-                        使用
+                        {t('side.use')}
                       </Button>
                     </Tooltip>,
                   ]
@@ -89,13 +100,14 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
 }
 
 export function ContextTab({ pid, entry, onJump }: { pid: string; entry: Entry; onJump: (id: string) => void }) {
+  const t = useT();
   const q = useQuery({
     queryKey: ['neighbors', entry.id],
     queryFn: () => api<{ before: Neighbor[]; after: Neighbor[] }>(`/projects/${pid}/entries/${entry.id}/neighbors`),
     staleTime: 30_000,
   });
-  if (q.isLoading) return <div className="center-spin small"><Spin size="small" /></div>;
-  const row = (n: Neighbor, current = false) => (
+  if (q.isLoading) return <Loading />;
+  const row = (n: Pick<Neighbor, 'id' | 'original' | 'translation' | 'stage'>, current = false) => (
     <div key={n.id} className={`ctx-row${current ? ' current' : ''}`} onClick={() => !current && onJump(n.id)}>
       <StageDot stage={n.stage} />
       <div className="ctx-text">
@@ -113,32 +125,23 @@ export function ContextTab({ pid, entry, onJump }: { pid: string; entry: Entry; 
   return (
     <div className="ctx-list">
       {q.data?.before.map((n) => row(n))}
-      {row({ id: entry.id, original: entry.original, translation: entry.translation, stage: entry.stage, category: entry.category, sortOrder: entry.sortOrder }, true)}
+      {row(entry, true)}
       {q.data?.after.map((n) => row(n))}
       <Typography.Paragraph type="secondary" className="small" style={{ marginTop: 8 }}>
-        同一文件中前后相邻的词条，点击可跳转（筛选条件内不可见的词条会临时显示）。
+        {t('side.contextHint')}
       </Typography.Paragraph>
     </div>
   );
 }
 
-export function HistoryTab({
-  pid,
-  entry,
-  canEdit,
-  onRollback,
-}: {
-  pid: string;
-  entry: Entry;
-  canEdit: boolean;
-  onRollback: (h: HistoryItem) => void;
-}) {
+export function HistoryTab({ pid, entry, canEdit, onRollback }: { pid: string; entry: Entry; canEdit: boolean; onRollback: (h: HistoryItem) => void }) {
+  const t = useT();
   const q = useQuery({
     queryKey: ['history', entry.id, entry.version],
     queryFn: () => api<HistoryItem[]>(`/projects/${pid}/entries/${entry.id}/history`),
   });
-  if (q.isLoading) return <div className="center-spin small"><Spin size="small" /></div>;
-  if (!q.data?.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无修改记录" />;
+  if (q.isLoading) return <Loading />;
+  if (!q.data?.length) return <Nothing text={t('side.noHistory')} />;
   return (
     <List
       size="small"
@@ -148,9 +151,9 @@ export function HistoryTab({
           actions={
             canEdit && i > 0 && h.action !== 'SOURCE_CHANGED' && h.translation !== entry.translation
               ? [
-                  <Popconfirm key="rb" title="回滚到这个版本的译文？" onConfirm={() => onRollback(h)} okText="回滚">
+                  <Popconfirm key="rb" title={t('side.rollbackConfirm')} onConfirm={() => onRollback(h)} okText={t('side.rollback')}>
                     <Button size="small" type="link" icon={<RollbackOutlined />}>
-                      回滚
+                      {t('side.rollback')}
                     </Button>
                   </Popconfirm>,
                 ]
@@ -160,17 +163,18 @@ export function HistoryTab({
           <div className="history-row">
             <Space size={6} wrap>
               <UserAvatar user={h.user} />
-              <b>{h.user?.displayName ?? '系统'}</b>
-              <Tag bordered={false}>{HISTORY_ACTION_LABELS[h.action as HistoryAction] ?? h.action}</Tag>
+              <b>{h.user?.displayName ?? t('common.system')}</b>
+              <Tag bordered={false}>{hasMessage(`history.${h.action}`) ? t(`history.${h.action}`) : h.action}</Tag>
+              {h.action === 'BATCH' && h.note && <span className="muted small">{historyNote(h.action, h.note, t)}</span>}
               <StageTag stage={h.stage} />
               <Tooltip title={formatTime(h.createdAt)}>
                 <span className="muted small">{fromNow(h.createdAt)}</span>
               </Tooltip>
             </Space>
             {h.action === 'SOURCE_CHANGED' ? (
-              <div className="history-text muted pre-wrap">旧原文：{h.note}</div>
+              <div className="history-text muted pre-wrap">{t('side.oldSource', { text: h.note })}</div>
             ) : (
-              <div className="history-text pre-wrap">{h.translation || <span className="muted">（空）</span>}</div>
+              <div className="history-text pre-wrap">{h.translation || <span className="muted">{t('common.empty')}</span>}</div>
             )}
           </div>
         </List.Item>

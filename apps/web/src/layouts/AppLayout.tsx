@@ -1,22 +1,15 @@
-import {
-  ApiOutlined,
-  BulbOutlined,
-  CrownOutlined,
-  LogoutOutlined,
-  MailOutlined,
-  MoonOutlined,
-  PlusOutlined,
-  SunOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { ApiOutlined, BulbOutlined, CrownOutlined, LogoutOutlined, MailOutlined, MoonOutlined, PlusOutlined, SunOutlined, UserOutlined } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Layout, Space, Tooltip } from 'antd';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 import { Logo } from '../components/Logo';
 import { UserAvatar } from '../components/Tags';
-import { useThemeMode } from '../theme';
+import { useT } from '../i18n';
+import { useAuth } from '../providers/AuthProvider';
+import { useThemeMode } from '../providers/ThemeProvider';
 
 export function AppLayout() {
+  const t = useT();
   const { user, logout, site } = useAuth();
   const { mode, toggle } = useThemeMode();
   const nav = useNavigate();
@@ -32,22 +25,23 @@ export function AppLayout() {
             <Logo />
             <nav className="top-nav">
               <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>
-                项目广场
+                {t('nav.explore')}
               </Link>
             </nav>
           </Space>
           <Space size={10} align="center">
-            <Tooltip title={mode === 'dark' ? '切换到浅色' : '切换到深色'}>
+            <LanguageSwitch />
+            <Tooltip title={t(mode === 'dark' ? 'theme.toLight' : 'theme.toDark')}>
               <Button type="text" shape="circle" icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={toggle} />
             </Tooltip>
             {user ? (
               <>
                 {canCreate && (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => nav('/projects/new')} className="hide-mobile">
-                    新建项目
+                    {t('nav.newProject')}
                   </Button>
                 )}
-                <Tooltip title="项目邀请">
+                <Tooltip title={t('nav.invitations')}>
                   <Badge count={user.pendingInvitations} size="small">
                     <Button type="text" shape="circle" icon={<MailOutlined />} onClick={() => nav('/me?tab=invitations')} />
                   </Badge>
@@ -58,16 +52,16 @@ export function AppLayout() {
                     items: [
                       { key: 'name', label: <div className="menu-user"><b>{user.displayName}</b><span>@{user.username}</span></div>, disabled: true },
                       { type: 'divider' },
-                      { key: 'me', icon: <UserOutlined />, label: '个人中心', onClick: () => nav('/me') },
-                      ...(canCreate ? [{ key: 'new', icon: <PlusOutlined />, label: '新建项目', onClick: () => nav('/projects/new') }] : []),
-                      ...(user.isSuperAdmin ? [{ key: 'admin', icon: <CrownOutlined />, label: '管理后台', onClick: () => nav('/admin') }] : []),
-                      { key: 'tokens', icon: <ApiOutlined />, label: 'API 令牌', onClick: () => nav('/me?tab=tokens') },
-                      { key: 'docs', icon: <ApiOutlined />, label: <a href="/api/docs" target="_blank" rel="noreferrer">API 文档</a> },
+                      { key: 'me', icon: <UserOutlined />, label: t('nav.profile'), onClick: () => nav('/me') },
+                      ...(canCreate ? [{ key: 'new', icon: <PlusOutlined />, label: t('nav.newProject'), onClick: () => nav('/projects/new') }] : []),
+                      ...(user.isSuperAdmin ? [{ key: 'admin', icon: <CrownOutlined />, label: t('nav.admin'), onClick: () => nav('/admin') }] : []),
+                      { key: 'tokens', icon: <ApiOutlined />, label: t('nav.tokens'), onClick: () => nav('/me?tab=tokens') },
+                      { key: 'docs', icon: <ApiOutlined />, label: <a href="/api/docs" target="_blank" rel="noreferrer">{t('nav.apiDocs')}</a> },
                       { type: 'divider' },
                       {
                         key: 'logout',
                         icon: <LogoutOutlined />,
-                        label: '退出登录',
+                        label: t('nav.logout'),
                         onClick: async () => {
                           await logout();
                           nav('/');
@@ -84,11 +78,11 @@ export function AppLayout() {
             ) : (
               <>
                 <Button type="text" onClick={() => nav(`/login?next=${encodeURIComponent(loc.pathname)}`)}>
-                  登录
+                  {t('nav.login')}
                 </Button>
                 {site?.allowRegistration !== false && (
                   <Button type="primary" icon={<BulbOutlined />} onClick={() => nav('/register')}>
-                    注册
+                    {t('nav.register')}
                   </Button>
                 )}
               </>

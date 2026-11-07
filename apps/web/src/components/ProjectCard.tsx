@@ -23,7 +23,7 @@ export function ProjectCard({ p }: { p: ProjectSummary }) {
           {p.name}
         </Typography.Title>
         <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} className="project-card-desc">
-          {p.description || t('home.noDescription')}
+          {p.description || t('common.noDescription')}
         </Typography.Paragraph>
         <div className="project-card-lang">
           <LangPair source={p.sourceLang} target={p.targetLang} />

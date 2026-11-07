@@ -50,7 +50,7 @@ export function applyLocale(locale: Locale) {
     /* ignore */
   }
   syncSideEffects(locale);
-  void i18n.changeLanguage(locale);
+  return i18n.changeLanguage(locale);
 }
 
 export type TFn = (key: string, params?: Record<string, unknown>) => string;

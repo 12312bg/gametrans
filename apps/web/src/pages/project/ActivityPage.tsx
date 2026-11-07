@@ -5,9 +5,12 @@ import { api, qs } from '../../api/client';
 import { useProject } from '../../api/project';
 import type { Activity, Paged } from '../../api/types';
 import { UserAvatar } from '../../components/Tags';
+import { useT } from '../../i18n';
+import { activityText } from '../../i18n/format';
 import { formatTime, fromNow } from '../../utils';
 
 export default function ActivityPage() {
+  const t = useT();
   const { project } = useProject();
   const [page, setPage] = useState(1);
   const q = useQuery({
@@ -16,7 +19,7 @@ export default function ActivityPage() {
     placeholderData: keepPreviousData,
   });
   return (
-    <Card variant="borderless" title="项目动态" loading={q.isLoading}>
+    <Card variant="borderless" title={t('activity.title')} loading={q.isLoading}>
       {q.data?.items.length ? (
         <>
           <Timeline
@@ -26,7 +29,7 @@ export default function ActivityPage() {
                   <UserAvatar user={a.user} />
                   <div>
                     <div>
-                      <b>{a.user?.displayName ?? '系统'}</b> {a.message}
+                      <b>{a.user?.displayName ?? t('common.system')}</b> {activityText(a, t)}
                     </div>
                     <Tooltip title={formatTime(a.createdAt)}>
                       <Typography.Text type="secondary" className="small">
@@ -43,7 +46,7 @@ export default function ActivityPage() {
           )}
         </>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无动态" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('activity.empty')} />
       )}
     </Card>
   );

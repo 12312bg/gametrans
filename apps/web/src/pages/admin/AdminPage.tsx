@@ -5,12 +5,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, qs } from '../../api/client';
 import type { AdminUser, Paged, ProjectSummary } from '../../api/types';
-import { useAuth } from '../../auth';
+import { useT } from '../../i18n';
+import { useAuth } from '../../providers/AuthProvider';
 import { ProgressBar } from '../../components/ProgressBar';
 import { EngineTag, UserAvatar, VisibilityTag } from '../../components/Tags';
 import { errorMessage, formatTime, fromNow } from '../../utils';
 
 export default function AdminPage() {
+  const t = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
   const { message } = App.useApp();
@@ -46,7 +48,7 @@ export default function AdminPage() {
     if (!resetUser) return;
     try {
       await api(`/admin/users/${resetUser.id}/reset-password`, { method: 'POST', body: { password: newPassword } });
-      message.success(`已重置 ${resetUser.username} 的密码`);
+      message.success(t('admin.resetDone', { username: resetUser.username }));
       setResetUser(null);
       setNewPassword('');
     } catch (e) {
@@ -56,17 +58,12 @@ export default function AdminPage() {
 
   return (
     <div className="page-container">
-      <Typography.Title level={3}>管理后台</Typography.Title>
+      <Typography.Title level={3}>{t('admin.title')}</Typography.Title>
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        {[
-          ['users', '用户'],
-          ['projects', '项目'],
-          ['files', '文件'],
-          ['entries', '词条'],
-        ].map(([k, label]) => (
+        {['users', 'projects', 'files', 'entries'].map((k) => (
           <Col key={k} xs={12} md={6}>
             <Card variant="borderless">
-              <Statistic title={label} value={stats.data?.[k] ?? 0} loading={stats.isLoading} />
+              <Statistic title={t(`admin.stat.${k}`)} value={stats.data?.[k] ?? 0} loading={stats.isLoading} />
             </Card>
           </Col>
         ))}
@@ -76,12 +73,12 @@ export default function AdminPage() {
           items={[
             {
               key: 'users',
-              label: '用户管理',
+              label: t('admin.tab.users'),
               children: (
                 <>
                   <Input.Search
                     allowClear
-                    placeholder="搜索用户名 / 邮箱 / 昵称"
+                    placeholder={t('admin.searchUsers')}
                     style={{ width: 300, marginBottom: 12 }}
                     onSearch={(v) => {
                       setQ(v);
@@ -96,7 +93,7 @@ export default function AdminPage() {
                     pagination={{ current: page, pageSize: 20, total: users.data?.total, onChange: setPage, showSizeChanger: false }}
                     columns={[
                       {
-                        title: '用户',
+                        title: t('admin.col.user'),
                         render: (_, u) => (
                           <Space>
                             <UserAvatar user={u} size={32} />
@@ -107,10 +104,10 @@ export default function AdminPage() {
                           </Space>
                         ),
                       },
-                      { title: '项目数', width: 90, render: (_, u) => u._count.memberships },
-                      { title: '注册时间', width: 160, render: (_, u) => formatTime(u.createdAt) },
+                      { title: t('admin.col.projects'), width: 90, render: (_, u) => u._count.memberships },
+                      { title: t('admin.col.registered'), width: 160, render: (_, u) => formatTime(u.createdAt) },
                       {
-                        title: '超级管理员',
+                        title: t('admin.col.superAdmin'),
                         width: 110,
                         render: (_, u) => (
                           <Switch
@@ -123,9 +120,9 @@ export default function AdminPage() {
                         ),
                       },
                       {
-                        title: '状态',
+                        title: t('admin.col.status'),
                         width: 100,
-                        render: (_, u) => (u.isBanned ? <Tag color="red" bordered={false}>已封禁</Tag> : <Tag color="green" bordered={false}>正常</Tag>),
+                        render: (_, u) => (u.isBanned ? <Tag color="red" bordered={false}>{t('admin.banned')}</Tag> : <Tag color="green" bordered={false}>{t('admin.active')}</Tag>),
                       },
                       {
                         title: '',
@@ -134,10 +131,10 @@ export default function AdminPage() {
                           u.id === user?.id ? null : (
                             <Space size={0}>
                               <Button type="link" size="small" onClick={() => setResetUser(u)}>
-                                重置密码
+                                {t('admin.resetPassword')}
                               </Button>
                               <Button type="link" size="small" danger={!u.isBanned} icon={<StopOutlined />} onClick={() => patch(u, { isBanned: !u.isBanned })}>
-                                {u.isBanned ? '解封' : '封禁'}
+                                {t(u.isBanned ? 'admin.unban' : 'admin.ban')}
                               </Button>
                             </Space>
                           ),
@@ -149,12 +146,12 @@ export default function AdminPage() {
             },
             {
               key: 'projects',
-              label: '全部项目',
+              label: t('admin.tab.projects'),
               children: (
                 <>
                   <Input.Search
                     allowClear
-                    placeholder="搜索项目"
+                    placeholder={t('admin.searchProjects')}
                     style={{ width: 300, marginBottom: 12 }}
                     onSearch={(v) => {
                       setPq(v);
@@ -169,7 +166,7 @@ export default function AdminPage() {
                     pagination={{ current: ppage, pageSize: 20, total: projects.data?.total, onChange: setPpage, showSizeChanger: false }}
                     columns={[
                       {
-                        title: '项目',
+                        title: t('admin.col.project'),
                         render: (_, p) => (
                           <div>
                             <Link to={`/projects/${p.id}`}>
@@ -182,10 +179,10 @@ export default function AdminPage() {
                           </div>
                         ),
                       },
-                      { title: '所有者', width: 140, render: (_, p) => p.owner.displayName },
-                      { title: '成员', width: 70, render: (_, p) => p._count.members },
-                      { title: '进度', width: 260, render: (_, p) => <ProgressBar stats={p.stats} height={6} /> },
-                      { title: '更新', width: 120, render: (_, p) => fromNow(p.updatedAt) },
+                      { title: t('admin.col.owner'), width: 140, render: (_, p) => p.owner.displayName },
+                      { title: t('admin.col.members'), width: 70, render: (_, p) => p._count.members },
+                      { title: t('admin.col.progress'), width: 260, render: (_, p) => <ProgressBar stats={p.stats} height={6} /> },
+                      { title: t('admin.col.updated'), width: 120, render: (_, p) => fromNow(p.updatedAt) },
                     ]}
                   />
                 </>
@@ -194,8 +191,8 @@ export default function AdminPage() {
           ]}
         />
       </Card>
-      <Modal title={`重置 ${resetUser?.username ?? ''} 的密码`} open={!!resetUser} onCancel={() => setResetUser(null)} onOk={doReset} okButtonProps={{ disabled: newPassword.length < 8 }}>
-        <Input.Password placeholder="新密码（至少 8 位）" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+      <Modal title={t('admin.resetTitle', { username: resetUser?.username ?? '' })} open={!!resetUser} onCancel={() => setResetUser(null)} onOk={doReset} okButtonProps={{ disabled: newPassword.length < 8 }}>
+        <Input.Password placeholder={t('admin.newPassword')} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
       </Modal>
     </div>
   );

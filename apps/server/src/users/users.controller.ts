@@ -1,7 +1,8 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBoolean, IsEmail, IsOptional, IsString, Length } from 'class-validator';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthService, PUBLIC_USER_SELECT } from '../auth/auth.service';
-import { AuthUser, CurrentUser } from '../common/decorators';
+import { AuthUser, CurrentUser, SessionOnly } from '../common/decorators';
 import { escapeLike, pageParams } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -32,6 +33,9 @@ export class UsersController {
     private readonly auth: AuthService,
   ) {}
 
+  @ApiOperation({ summary: '修改个人资料', description: '仅限网页登录调用。' })
+  @ApiTags('用户')
+  @SessionOnly()
   @Patch('users/me')
   async updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
     if (dto.email) {
@@ -43,6 +47,9 @@ export class UsersController {
     return this.prisma.user.update({ where: { id: user.id }, data: dto, select: PUBLIC_USER_SELECT });
   }
 
+  @ApiOperation({ summary: '修改密码', description: '仅限网页登录调用。' })
+  @ApiTags('用户')
+  @SessionOnly()
   @Post('users/me/password')
   async changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
     await this.auth.changePassword(user.id, dto.oldPassword, dto.newPassword);
@@ -50,6 +57,9 @@ export class UsersController {
   }
 
   /** 邀请成员时的用户搜索 */
+  @ApiOperation({ summary: '搜索用户', description: '按用户名或昵称搜索，用于邀请成员，最多返回 10 条。' })
+  @ApiTags('用户')
+  @ApiQuery({ name: 'q', required: false, description: '关键字' })
   @Get('users/search')
   search(@Query('q') q = '') {
     const term = escapeLike(q.trim());
@@ -68,6 +78,8 @@ export class UsersController {
     });
   }
 
+  @ApiOperation({ summary: '用户主页', description: '公开资料、参与的项目与贡献统计。' })
+  @ApiTags('用户')
   @Get('users/:username')
   async profile(@Param('username') username: string, @CurrentUser() viewer: AuthUser) {
     const user = await this.prisma.user.findUnique({
@@ -96,6 +108,8 @@ export class UsersController {
     if (!user.isSuperAdmin) throw new ForbiddenException('仅超级管理员可访问');
   }
 
+  @ApiOperation({ summary: '全站统计', description: '仅超级管理员（网页登录）。' })
+  @ApiTags('管理后台')
   @Get('admin/stats')
   async adminStats(@CurrentUser() user: AuthUser) {
     this.ensureAdmin(user);
@@ -108,6 +122,11 @@ export class UsersController {
     return { users, projects, entries, files };
   }
 
+  @ApiOperation({ summary: '用户列表', description: '仅超级管理员（网页登录）。' })
+  @ApiTags('管理后台')
+  @ApiQuery({ name: 'pageSize', required: false, description: '每页条数' })
+  @ApiQuery({ name: 'page', required: false, description: '页码，从 1 开始' })
+  @ApiQuery({ name: 'q', required: false, description: '按用户名 / 邮箱 / 昵称搜索' })
   @Get('admin/users')
   async adminUsers(@CurrentUser() user: AuthUser, @Query('q') q = '', @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     this.ensureAdmin(user);
@@ -135,6 +154,8 @@ export class UsersController {
     return { items, total, ...p };
   }
 
+  @ApiOperation({ summary: '封禁 / 解封、设置超级管理员', description: '仅超级管理员（网页登录）。' })
+  @ApiTags('管理后台')
   @Patch('admin/users/:id')
   async adminUpdate(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AdminUpdateUserDto) {
     this.ensureAdmin(user);
@@ -144,6 +165,8 @@ export class UsersController {
     return this.prisma.user.update({ where: { id }, data: dto, select: { ...PUBLIC_USER_SELECT, isBanned: true } });
   }
 
+  @ApiOperation({ summary: '重置用户密码', description: '仅超级管理员（网页登录）。' })
+  @ApiTags('管理后台')
   @Post('admin/users/:id/reset-password')
   async adminResetPassword(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ResetPasswordDto) {
     this.ensureAdmin(user);

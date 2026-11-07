@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { PERMISSIONS, PROJECT_ROLES, ProjectRole, ROLE_LABELS, canManageMember } from '@gametrans/shared';
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AccessService, ProjectContext } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
@@ -40,6 +41,7 @@ class InviteDto {
 
 const USER_BRIEF = { id: true, username: true, displayName: true } as const;
 
+@ApiTags('成员与邀请')
 @Controller()
 export class MembersController {
   constructor(
@@ -56,6 +58,7 @@ export class MembersController {
 
   // ───────── 成员 ─────────
 
+  @ApiOperation({ summary: '成员列表', description: '含每位成员的翻译 / 审核数。' })
   @Public()
   @Get('projects/:pid/members')
   async list(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string) {
@@ -77,6 +80,7 @@ export class MembersController {
       .sort((a, b) => order[a.role] - order[b.role]);
   }
 
+  @ApiOperation({ summary: '修改成员角色', description: '管理员只能管理比自己低的角色。' })
   @Patch('projects/:pid/members/:uid')
   async changeRole(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('uid') uid: string, @Body() dto: RoleDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -95,6 +99,7 @@ export class MembersController {
     return updated;
   }
 
+  @ApiOperation({ summary: '移除成员 / 退出项目', description: 'uid 为自己时表示退出；所有者不能退出。' })
   @Delete('projects/:pid/members/:uid')
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('uid') uid: string) {
     const ctx = await this.access.context(user, pid);
@@ -118,6 +123,7 @@ export class MembersController {
 
   // ───────── 加入申请 ─────────
 
+  @ApiOperation({ summary: '申请加入', description: '仅公开项目。' })
   @Post('projects/:pid/join-requests')
   async requestJoin(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: JoinRequestDto) {
     const ctx = await this.access.context(user, pid);
@@ -128,6 +134,7 @@ export class MembersController {
     return this.prisma.joinRequest.create({ data: { projectId: pid, userId: user.id, message: dto.message ?? '' } });
   }
 
+  @ApiOperation({ summary: '撤回我的申请' })
   @Delete('projects/:pid/join-requests/mine')
   async cancelMine(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
     await this.prisma.joinRequest.updateMany({
@@ -137,6 +144,8 @@ export class MembersController {
     return { ok: true };
   }
 
+  @ApiOperation({ summary: '加入申请列表', description: '需要成员管理权限。' })
+  @ApiQuery({ name: 'status', required: false, description: '状态', enum: ['PENDING', 'APPROVED', 'REJECTED', 'CANCELED'] })
   @Get('projects/:pid/join-requests')
   async listRequests(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Query('status') status = 'PENDING') {
     await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -149,6 +158,7 @@ export class MembersController {
     });
   }
 
+  @ApiOperation({ summary: '批准加入申请', description: '可指定角色，默认翻译员。' })
   @Post('projects/:pid/join-requests/:rid/approve')
   async approve(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('rid') rid: string, @Body() dto: ApproveDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -174,6 +184,7 @@ export class MembersController {
     return { ok: true };
   }
 
+  @ApiOperation({ summary: '拒绝加入申请' })
   @Post('projects/:pid/join-requests/:rid/reject')
   async reject(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('rid') rid: string) {
     await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -187,6 +198,7 @@ export class MembersController {
 
   // ───────── 邀请 ─────────
 
+  @ApiOperation({ summary: '邀请成员', description: '按用户名或邮箱邀请，对方接受后加入。' })
   @Post('projects/:pid/invitations')
   async invite(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: InviteDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -214,6 +226,7 @@ export class MembersController {
     return inv;
   }
 
+  @ApiOperation({ summary: '已发出的邀请' })
   @Get('projects/:pid/invitations')
   async listInvitations(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
     await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -224,6 +237,7 @@ export class MembersController {
     });
   }
 
+  @ApiOperation({ summary: '撤回邀请' })
   @Delete('projects/:pid/invitations/:iid')
   async cancelInvitation(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('iid') iid: string) {
     await this.access.require(user, pid, PERMISSIONS.MANAGE_MEMBERS);
@@ -234,6 +248,7 @@ export class MembersController {
     return { ok: true };
   }
 
+  @ApiOperation({ summary: '我收到的邀请' })
   @Get('invitations')
   myInvitations(@CurrentUser() user: AuthUser) {
     return this.prisma.invitation.findMany({
@@ -246,6 +261,8 @@ export class MembersController {
     });
   }
 
+  @ApiOperation({ summary: '接受 / 拒绝邀请' })
+  @ApiParam({ name: 'action', enum: ['accept', 'decline'] })
   @Post('invitations/:iid/:action')
   async respond(@CurrentUser() user: AuthUser, @Param('iid') iid: string, @Param('action') action: string) {
     if (action !== 'accept' && action !== 'decline') throw new BadRequestException('无效的操作');

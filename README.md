@@ -17,6 +17,7 @@
 | 成员与权限 | 五级项目角色 + 站点超级管理员；公开项目可申请加入，管理员审批；邀请成员 |
 | 文件更新 | 重新上传新版本时按键名合并：保留已有译文，原文变化的词条标记为「有疑问」 |
 | 导出 | 按状态与文件范围生成 zip（保留游戏目录结构），可附带 ParaTranz 兼容的译文 JSON |
+| 开放接口 | REST API + Swagger 在线文档；个人 API 令牌（只读 / 读写、可限定项目）供脚本与 CI 调用 |
 | 其他 | 进度统计、文本分类、贡献榜、项目动态、管理后台、浅色/深色主题、移动端适配 |
 
 ## 技术栈
@@ -60,6 +61,7 @@ gametrans/
 │       ├── src/events.ts        #   事件指令遍历（两类引擎共用）
 │       └── test/                #   测试与夹具（Ruby 生成的 RGSS 数据、MV/MZ JSON）
 ├── e2e/                         # Playwright 浏览器端到端测试
+├── docs/openapi.json            # OpenAPI 3 接口文档（离线版）
 ├── docker-compose.yml
 └── Dockerfile
 ```
@@ -122,6 +124,7 @@ pnpm dev:web
 - 翻译编辑器：快捷键、控制符检查、翻译记忆、术语、批量操作、锁定、历史回滚、并发冲突、上下文跳转
 - 文件更新与导出校验、XP/VX/Ace 数据回写（若本机装有 Ruby，会用 Ruby 加载校验）
 - 项目设置、转让与删除、管理后台、深色模式、手机布局
+- 个人 API 令牌（只读 / 读写、项目限定、不继承超级管理员、撤销）与 Swagger 文档
 
 每个用例都会断言页面没有 JS 异常和控制台错误。
 
@@ -157,6 +160,97 @@ pnpm test:e2e
 | `UPLOAD_LIMIT_MB` | `512` | 单个上传文件大小上限 |
 | `COOKIE_SECURE` | `false` | 通过 HTTPS 访问时设为 `true` |
 | `JOB_CONCURRENCY` | `1` | 后台任务并发数 |
+| `API_DOCS` | `true` | 是否开放在线 API 文档 `/api/docs` |
+
+## API 使用
+
+所有接口都在 `/api` 下，默认端口为 `3000`（`PORT` 可改）。用 Docker 部署时，前端与 API 共用同一端口。
+
+| 地址 | 说明 |
+| --- | --- |
+| `/api/docs` | Swagger UI 在线文档，可点击「Authorize」填入令牌后直接调试 |
+| `/api/docs/openapi.json` | OpenAPI 3 文档，可用于生成各语言客户端 |
+| `docs/openapi.json` | 仓库内的离线版，接口变更后执行 `pnpm --filter @gametrans/server build && pnpm --filter @gametrans/server openapi:export` 重新生成（不需要数据库） |
+
+### 认证
+
+- **网页登录**：`POST /api/auth/login` 后服务器写入 httpOnly Cookie `gt_token`，供浏览器使用。
+- **个人 API 令牌**：供脚本、CI、机器人使用。在网页右上角头像 →「API 令牌」中创建，请求时带上 `Authorization: Bearer gt_xxxxxxxx`。
+
+| 令牌规则 | 说明 |
+| --- | --- |
+| 权限范围 | **只读**：只能发 GET / HEAD 请求；**读写**：可执行本人角色允许的全部操作。都不会超过本人在项目中的角色 |
+| 项目限定 | 可选限定到单个项目，之后只能访问 `/api/projects/{该项目}/…` 和 `/api/auth/me` |
+| 超级管理员 | 令牌**不继承**超级管理员权限；管理后台、管理令牌、修改密码与资料只能网页登录后操作 |
+| 有效期 | 7 / 30 / 90 / 365 天（默认 90 天），可随时撤销；每人最多 20 个 |
+| 存储 | 服务端只保存 SHA-256 哈希，明文只在创建时显示一次 |
+
+### 错误格式
+
+出错时返回对应 HTTP 状态码与 `{"statusCode":403,"message":"没有权限执行此操作","error":"Forbidden"}`（参数校验失败时 `message` 为数组）：
+
+- 401：未登录，或令牌无效 / 已过期
+- 403：没有权限，包括只读令牌发起写操作、限定项目的令牌访问其他项目
+- 404：资源不存在，私有项目对非成员也返回 404
+- 409：保存词条时 `version` 已过期，响应中的 `current` 为最新词条
+
+### 示例：用 curl 走完整流程
+
+```bash
+API=http://localhost:3000/api
+TOKEN=gt_xxxxxxxx                     # 读写令牌
+PID=项目ID                             # 项目 URL /projects/<PID> 中的 ID
+H="Authorization: Bearer $TOKEN"
+
+# 1. 上传游戏目录 zip（也可以上传多个 data/*.json、Data/*.rvdata2 文件），返回解析任务
+curl -H "$H" -F "files=@MyGame.zip" $API/projects/$PID/files
+
+# 2. 轮询任务，直到 status 为 SUCCEEDED
+curl -H "$H" $API/projects/$PID/jobs/<任务ID>
+
+# 3. 获取未翻译的对话（可按 fileId / stage / category / q 筛选，分页 page / pageSize）
+curl -H "$H" "$API/projects/$PID/entries?stage=UNTRANSLATED&category=dialogue&pageSize=100"
+
+# 4. 提交译文：必须带上词条当前的 version（乐观锁）；不传 stage 时自动设为「已翻译」
+curl -H "$H" -H "Content-Type: application/json" -X PUT \
+  -d '{"translation":"你好，旅行者。","version":0}' $API/projects/$PID/entries/<词条ID>
+
+# 5. 生成导出包（需要管理员及以上），任务完成后下载
+curl -H "$H" -H "Content-Type: application/json" -X POST \
+  -d '{"stages":["TRANSLATED","REVIEWED","LOCKED"]}' $API/projects/$PID/exports
+curl -H "$H" -o export.zip $API/projects/$PID/exports/<任务ID>/download
+```
+
+### 示例：批量提交机翻（Python）
+
+```python
+import requests
+
+API, PID = "http://localhost:3000/api", "项目ID"
+s = requests.Session()
+s.headers["Authorization"] = "Bearer gt_xxxxxxxx"
+
+def machine_translate(text: str) -> str:
+    return text  # 替换为你的机器翻译调用，注意保留 \C[2] 等控制符
+
+done = set()
+while True:
+    # 提交后的词条会从「未翻译」结果中消失，所以每次都取第 1 页，直到没有新词条
+    r = s.get(f"{API}/projects/{PID}/entries",
+              params={"stage": "UNTRANSLATED", "pageSize": 200}).json()
+    todo = [e for e in r["items"] if e["id"] not in done]
+    if not todo:
+        break
+    for e in todo:
+        done.add(e["id"])
+        res = s.put(f"{API}/projects/{PID}/entries/{e['id']}",
+                    json={"translation": machine_translate(e["original"]),
+                          "stage": "QUESTIONED",      # 标记为「有疑问」，留给人工校对
+                          "version": e["version"]})
+        if res.status_code == 409:                    # 期间被他人修改，跳过
+            continue
+        res.raise_for_status()
+```
 
 ## 角色与权限
 

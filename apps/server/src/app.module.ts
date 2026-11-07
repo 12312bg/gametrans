@@ -5,6 +5,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { TokensController } from './auth/tokens.controller';
+import { TokensService } from './auth/tokens.service';
 import { AuthGuard } from './common/auth.guard';
 import { CommonModule } from './common/common.module';
 import { config } from './config';
@@ -47,6 +49,7 @@ function redisConnection(url: string) {
   ],
   controllers: [
     AuthController,
+    TokensController,
     UsersController,
     ProjectsController,
     MembersController,
@@ -58,6 +61,7 @@ function redisConnection(url: string) {
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
     AuthService,
+    TokensService,
     EntriesService,
     JobsService,
     ParseService,

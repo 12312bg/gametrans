@@ -43,12 +43,13 @@ test('上传游戏目录 zip，后台解析后展示文件与进度', async ({ p
   await asOwner(page);
   await page.goto(`/projects/${pid}/files`);
   await page.locator('.ant-upload-drag input[type=file]').setInputFiles({ name: 'MyGame.zip', mimeType: 'application/zip', buffer: mzZip() });
-  await expect(page.locator('.pending-head')).toContainText('待上传 1 个文件');
+  // zip 在浏览器中解压，图片、插件源码不是数据文件，不会上传
+  await expect(toast(page, '已从 MyGame.zip 中提取 7 个数据文件，跳过 2 个')).toBeVisible();
+  await expect(page.locator('.pending-head')).toContainText('待上传 7 个文件');
   await btn(page, '开始上传').click();
   await expect(toast(page, '上传完成，正在后台解析')).toBeVisible();
   const job = page.locator('.job-result').first();
   await expect(job).toContainText('新增文件 7', { timeout: 30_000 });
-  // zip 中的图片、插件源码不是数据文件，解压时直接忽略
   await expect(job).not.toContainText('失败');
   for (const path of ['data/Map001.json', 'data/System.json', 'js/plugins.js']) {
     await expect(page.getByRole('row').filter({ hasText: path })).toBeVisible();

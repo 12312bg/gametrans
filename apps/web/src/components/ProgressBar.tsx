@@ -1,25 +1,23 @@
 import { Tooltip } from 'antd';
-import { STAGE_LABELS } from '@gametrans/shared';
 import type { StageCounts } from '../api/types';
+import { useT } from '../i18n';
 import { progressOf } from '../utils';
 import { STAGE_DOT } from './Tags';
 
-/** 分段进度条：已审核/已锁定（绿/紫）、已翻译（蓝）、有疑问（橙）、未翻译（灰） */
+const SEGMENTS = ['LOCKED', 'REVIEWED', 'TRANSLATED', 'QUESTIONED'] as const;
+const LEGEND = ['REVIEWED', 'LOCKED', 'TRANSLATED', 'QUESTIONED', 'UNTRANSLATED', 'HIDDEN'] as const;
+
+/** 分段进度条：已锁定 / 已审核 / 已翻译 / 有疑问，其余为未翻译 */
 export function ProgressBar({ stats, height = 8, showText = true }: { stats: StageCounts | undefined; height?: number; showText?: boolean }) {
+  const t = useT();
   const p = progressOf(stats);
-  const seg = (n: number) => (p.total ? `${(n / p.total) * 100}%` : '0%');
-  const parts = [
-    { k: 'LOCKED' as const, n: p.s.LOCKED },
-    { k: 'REVIEWED' as const, n: p.s.REVIEWED },
-    { k: 'TRANSLATED' as const, n: p.s.TRANSLATED },
-    { k: 'QUESTIONED' as const, n: p.s.QUESTIONED },
-  ];
+  const width = (n: number) => (p.total ? `${(n / p.total) * 100}%` : '0%');
   const tip = (
     <div style={{ lineHeight: 1.8 }}>
-      {(['REVIEWED', 'LOCKED', 'TRANSLATED', 'QUESTIONED', 'UNTRANSLATED', 'HIDDEN'] as const).map((k) => (
+      {LEGEND.map((k) => (
         <div key={k}>
           <span className="stage-dot" style={{ background: STAGE_DOT[k], marginRight: 6 }} />
-          {STAGE_LABELS[k]}：{p.s[k].toLocaleString()}
+          {t(`stage.${k}`)}: {p.s[k].toLocaleString()}
         </div>
       ))}
     </div>
@@ -28,17 +26,17 @@ export function ProgressBar({ stats, height = 8, showText = true }: { stats: Sta
     <Tooltip title={tip}>
       <div className="progress-wrap">
         <div className="progress-track" style={{ height }}>
-          {parts.map((x) => (x.n ? <div key={x.k} style={{ width: seg(x.n), background: STAGE_DOT[x.k] }} /> : null))}
+          {SEGMENTS.map((k) => (p.s[k] ? <div key={k} style={{ width: width(p.s[k]), background: STAGE_DOT[k] }} /> : null))}
         </div>
         {showText && (
           <div className="progress-text">
             <span>
-              已翻译 <b>{p.translatedPct}%</b>
+              {t('progress.translated')} <b>{p.translatedPct}%</b>
             </span>
             <span>
-              已审核 <b>{p.reviewedPct}%</b>
+              {t('progress.reviewed')} <b>{p.reviewedPct}%</b>
             </span>
-            <span className="muted">{p.total.toLocaleString()} 条</span>
+            <span className="muted">{t('common.count', { count: p.total.toLocaleString() })}</span>
           </div>
         )}
       </div>

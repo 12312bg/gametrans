@@ -325,6 +325,12 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  position: relative;
+}
+.auth-lang {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 .auth-card {
   width: 100%;
@@ -477,6 +483,9 @@ body {
 }
 .danger-row + .danger-row {
   border-top: 1px solid var(--border);
+}
+.zip-progress {
+  margin-top: 12px;
 }
 .pending-upload {
   margin-top: 16px;

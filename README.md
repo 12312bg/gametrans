@@ -2,12 +2,13 @@
 
 参考 [ParaTranz](https://paratranz.cn) 的在线游戏本地化协作平台，首批支持 **RPG Maker XP / VX / VX Ace / MV / MZ**。
 
-上传游戏数据（单个文件、整个文件夹或 zip 压缩包），平台自动提取可翻译文本。团队成员在线翻译、审核，最后一键导出可直接覆盖到游戏目录的数据文件。
+上传游戏数据（单个文件、整个文件夹或 zip 压缩包），平台自动提取可翻译文本。团队成员在线翻译、审核，最后一键导出可直接覆盖到游戏目录的数据文件。界面与服务端提示支持简体中文和英文。
 
 ## 功能
 
 | 模块 | 说明 |
 | --- | --- |
+| 上传 | 支持数据文件、整个游戏文件夹或 zip。zip 在浏览器中解压，只上传数据文件，几百 MB 的游戏包也不会超过上传上限；通过 API 直接上传的 zip 由服务端流式解压 |
 | 文件解析 | 无损读写 Ruby Marshal（`.rxdata` / `.rvdata` / `.rvdata2`）与 MV/MZ JSON、`js/plugins.js`；未翻译时导出结果与原文件逐字节一致 |
 | 在线翻译 | 词条列表 + 编辑面板；高亮控制符（`\C[2]`、`\N[1]` 等）和术语；提示缺失控制符、行数超出；快捷键；未保存草稿提示；并发编辑冲突处理 |
 | 审核流程 | 未翻译 → 已翻译 → 已审核，另有「有疑问 / 已锁定 / 已隐藏」；支持批量审核、锁定、隐藏、清空 |
@@ -17,12 +18,13 @@
 | 成员与权限 | 五级项目角色 + 站点超级管理员；公开项目可申请加入，管理员审批；邀请成员 |
 | 文件更新 | 重新上传新版本时按键名合并：保留已有译文，原文变化的词条标记为「有疑问」 |
 | 导出 | 按状态与文件范围生成 zip（保留游戏目录结构），可附带 ParaTranz 兼容的译文 JSON |
-| 开放接口 | REST API + Swagger 在线文档；个人 API 令牌（只读 / 读写、可限定项目）供脚本与 CI 调用 |
+| 开放接口 | REST API + Swagger 在线文档；个人 API 令牌（只读 / 读写、可限定项目）供脚本与 CI 调用；统一的错误码 |
+| 多语言 | 简体中文 / English。自动识别浏览器语言，切换后保存到账号；错误提示、项目动态、词条位置说明、解析提示都按查看者的语言显示 |
 | 其他 | 进度统计、文本分类、贡献榜、项目动态、管理后台、浅色/深色主题、移动端适配 |
 
 ## 技术栈
 
-- **前端**：React 18、Vite 5、TypeScript、Ant Design 5、TanStack Query 5、React Router 6
+- **前端**：React 18、Vite 5、TypeScript、Ant Design 5、TanStack Query 5、React Router 6、i18next
 - **后端**：NestJS 10、Prisma 6、PostgreSQL 16（`pg_trgm`）、BullMQ 5 + Redis（异步解析与导出）
 - **解析库**：`packages/rpgmaker`，纯 TypeScript 实现，包括 Ruby Marshal 4.8 读写、RGSS 脚本字符串词法分析和 MV/MZ 数据遍历。它依赖 `fflate`，可在 Node 和浏览器中运行
 - **工程**：pnpm workspace monorepo，Docker Compose 部署
@@ -34,26 +36,33 @@ gametrans/
 ├── apps/
 │   ├── server/                  # NestJS 后端
 │   │   ├── prisma/              #   数据模型 schema.prisma 与迁移
-│   │   └── src/
-│   │       ├── auth/            #   注册 / 登录（httpOnly Cookie + JWT）
-│   │       ├── users/           #   个人资料、用户搜索、超级管理员接口
+│   │   └── src/                 #   按功能分模块，每个模块含 module / controller / service / dto
+│   │       ├── auth/            #   注册、登录（httpOnly Cookie + JWT）、个人 API 令牌
+│   │       ├── users/           #   个人资料、用户搜索、管理后台接口
 │   │       ├── projects/        #   项目增删改查、统计、动态、转让
 │   │       ├── members/         #   成员、加入申请、邀请
-│   │       ├── files/           #   上传、替换、下载原文件、任务查询
+│   │       ├── files/           #   上传、替换、下载原文件
+│   │       ├── jobs/            #   BullMQ 任务：解析合并（parse，含流式解压 zip）与导出打包（export）
 │   │       ├── entries/         #   词条查询 / 保存 / 批量 / 历史 / 回滚 / 翻译记忆
 │   │       ├── terms/           #   术语表
 │   │       ├── exports/         #   导出包
-│   │       ├── jobs/            #   BullMQ 任务：解析合并（parse）与导出打包（export）
-│   │       └── common/          #   鉴权守卫、项目权限、存储、动态日志
+│   │       └── common/          #   鉴权守卫、项目权限、统一异常与错误码、请求语言、存储、动态日志
 │   └── web/                     # React 前端
-│       └── src/
-│           ├── api/             #   请求封装与类型
-│           ├── layouts/         #   全站布局、项目布局
-│           ├── pages/           #   页面（project/ 下为项目内各标签页，admin/ 为管理后台）
-│           ├── editor/          #   翻译编辑器组件（高亮、侧栏面板）
-│           └── components/      #   通用组件（进度条、标签、头像等）
+│       ├── src/
+│       │   ├── api/             #   请求封装（带 Accept-Language）与类型
+│       │   ├── i18n/            #   i18next 初始化、语言检测；ui/ 下按页面分区的中英文案
+│       │   ├── providers/       #   登录态、主题
+│       │   ├── layouts/         #   全站布局、项目布局
+│       │   ├── components/      #   通用组件（进度条、标签、语言切换等）
+│       │   └── pages/           #   auth / home / profile / admin / project
+│       │       └── project/     #     项目内各标签页；files/（上传、浏览器端解压 zip）、editor/（翻译编辑器）
+│       └── test/                #   文案键检查
 ├── packages/
-│   ├── shared/                  # 前后端共享：引擎、角色、权限矩阵、词条状态、控制符检测
+│   ├── shared/                  # 前后端共享
+│   │   ├── src/domain/          #   引擎与路径识别、角色与权限矩阵、词条状态、令牌规则
+│   │   ├── src/errors.ts        #   错误码 → HTTP 状态码
+│   │   ├── src/format.ts        #   结构化文本（位置说明、动态、提示）的渲染
+│   │   └── src/i18n/            #   前后端共用文案：错误、校验、枚举、动态、位置说明、解析提示
 │   └── rpgmaker/                # 文本提取与回写库
 │       ├── src/marshal/         #   Ruby Marshal 读写（字节级往返）
 │       ├── src/rgss/            #   XP/VX/Ace 数据与 Scripts 脚本字符串
@@ -108,7 +117,7 @@ pnpm dev:web
 
 | 命令 | 说明 |
 | --- | --- |
-| `pnpm test` | 运行解析库测试（Marshal 往返、提取、回写、路径识别） |
+| `pnpm test` | 单元测试：解析库（Marshal 往返、提取、回写）、共享包（文案、路径识别）、前端文案键检查 |
 | `pnpm test:e2e` | 构建后运行浏览器端到端测试（见下文） |
 | `pnpm typecheck` | 全部包类型检查 |
 | `pnpm build` | 构建全部包 |
@@ -125,6 +134,7 @@ pnpm dev:web
 - 文件更新与导出校验、XP/VX/Ace 数据回写（若本机装有 Ruby，会用 Ruby 加载校验）
 - 项目设置、转让与删除、管理后台、深色模式、手机布局
 - 个人 API 令牌（只读 / 读写、项目限定、不继承超级管理员、撤销）与 Swagger 文档
+- 英文界面、语言切换并保存到账号、按语言返回的错误；浏览器端解压超过上限的 zip、超限提示与 413
 
 每个用例都会断言页面没有 JS 异常和控制台错误。
 
@@ -134,7 +144,7 @@ createdb -O gametrans gametrans_e2e      # 或在 psql 中 CREATE DATABASE gamet
 pnpm test:e2e
 ```
 
-测试使用独立的数据库 `gametrans_e2e`（需预先创建，启动时自动执行 `prisma migrate deploy`）、Redis 1 号库和 `e2e/.tmp/` 存储目录，不会影响开发数据。数据库不会被清空，各用例使用随机命名的用户和项目互相隔离。以下变量可以覆盖默认值：
+测试使用独立的数据库 `gametrans_e2e`（需预先创建，启动时自动执行 `prisma migrate deploy`）、Redis 1 号库和 `e2e/.tmp/` 存储目录，不会影响开发数据。测试服务的上传上限设为 64 MB，便于覆盖超限场景。数据库不会被清空，各用例使用随机命名的用户和项目互相隔离。以下变量可以覆盖默认值：
 
 | 变量 | 默认值 |
 | --- | --- |
@@ -157,7 +167,7 @@ pnpm test:e2e
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | 启动时若该用户名不存在，则创建超级管理员 |
 | `ALLOW_REGISTRATION` | `true` | 是否开放公开注册 |
 | `PROJECT_CREATION` | `everyone` | `everyone`：任何登录用户可创建项目；`superadmin`：仅超级管理员 |
-| `UPLOAD_LIMIT_MB` | `512` | 单个上传文件大小上限 |
+| `UPLOAD_LIMIT_MB` | `2048` | 单个上传文件大小上限。前面有 Nginx 等反向代理时，代理的上限（如 `client_max_body_size`）也要相应调大 |
 | `COOKIE_SECURE` | `false` | 通过 HTTPS 访问时设为 `true` |
 | `JOB_CONCURRENCY` | `1` | 后台任务并发数 |
 | `API_DOCS` | `true` | 是否开放在线 API 文档 `/api/docs` |
@@ -185,14 +195,32 @@ pnpm test:e2e
 | 有效期 | 7 / 30 / 90 / 365 天（默认 90 天），可随时撤销；每人最多 20 个 |
 | 存储 | 服务端只保存 SHA-256 哈希，明文只在创建时显示一次 |
 
+### 多语言
+
+接口返回的提示文字按以下顺序选择语言：请求头 `Accept-Language` → 账号设置的界面语言 → 简体中文。目前支持 `zh-CN` 和 `en`。
+
+词条的位置说明（`contextData`）、项目动态（`params`）、解析与导出提示（`code` + `params`）以结构化数据保存，接口同时返回按请求语言渲染好的文本（如 `contextText`、`message`），客户端也可以自行渲染。
+
 ### 错误格式
 
-出错时返回对应 HTTP 状态码与 `{"statusCode":403,"message":"没有权限执行此操作","error":"Forbidden"}`（参数校验失败时 `message` 为数组）：
+出错时返回对应的 HTTP 状态码和统一的响应体：
 
-- 401：未登录，或令牌无效 / 已过期
-- 403：没有权限，包括只读令牌发起写操作、限定项目的令牌访问其他项目
-- 404：资源不存在，私有项目对非成员也返回 404
-- 409：保存词条时 `version` 已过期，响应中的 `current` 为最新词条
+```json
+{ "statusCode": 404, "code": "PROJECT_NOT_FOUND", "message": "项目不存在" }
+```
+
+- `code`：稳定的错误码，程序应据此判断，完整列表见 `packages/shared/src/errors.ts`
+- `message`：按请求语言翻译的说明，可直接展示给用户
+- `params`：部分错误附带参数，如参数校验失败时的 `{ "field": "name" }`、文件超限时的 `{ "limit": 2048 }`
+
+| 状态码 | 常见错误码 |
+| --- | --- |
+| 400 | `VALIDATION_FAILED`（参数校验失败）、`SAME_LANGUAGE`、`NO_FILES` 等 |
+| 401 | `AUTH_REQUIRED`（未登录）、`TOKEN_INVALID`（令牌无效或已过期）、`BAD_AUTH_HEADER` |
+| 403 | `FORBIDDEN`、`TOKEN_READ_ONLY`（只读令牌发起写操作）、`TOKEN_PROJECT_SCOPE`（限定项目的令牌访问其他项目）、`SESSION_ONLY` |
+| 404 | `PROJECT_NOT_FOUND`、`ENTRY_NOT_FOUND` 等；私有项目对非成员也返回 404 |
+| 409 | `ENTRY_CONFLICT`：保存词条时 `version` 已过期，响应中的 `current` 为最新词条 |
+| 413 | `FILE_TOO_LARGE`：单个文件超过 `UPLOAD_LIMIT_MB` |
 
 ### 示例：用 curl 走完整流程
 
@@ -202,7 +230,7 @@ TOKEN=gt_xxxxxxxx                     # 读写令牌
 PID=项目ID                             # 项目 URL /projects/<PID> 中的 ID
 H="Authorization: Bearer $TOKEN"
 
-# 1. 上传游戏目录 zip（也可以上传多个 data/*.json、Data/*.rvdata2 文件），返回解析任务
+# 1. 上传游戏目录 zip（服务端流式解压，只取数据文件；也可以上传多个 data/*.json、Data/*.rvdata2 文件），返回解析任务
 curl -H "$H" -F "files=@MyGame.zip" $API/projects/$PID/files
 
 # 2. 轮询任务，直到 status 为 SUCCEEDED
@@ -247,14 +275,14 @@ while True:
                     json={"translation": machine_translate(e["original"]),
                           "stage": "QUESTIONED",      # 标记为「有疑问」，留给人工校对
                           "version": e["version"]})
-        if res.status_code == 409:                    # 期间被他人修改，跳过
+        if res.status_code == 409:                    # ENTRY_CONFLICT：期间被他人修改，跳过
             continue
         res.raise_for_status()
 ```
 
 ## 角色与权限
 
-权限按角色固定，作用于整个项目。规则集中定义在 `packages/shared/src/index.ts`，前后端共用。
+权限按角色固定，作用于整个项目。规则集中定义在 `packages/shared/src/domain/permissions.ts`，前后端共用。
 
 | 权限 | 访客 | 翻译员 | 审核员 | 管理员 | 所有者 |
 | --- | :-: | :-: | :-: | :-: | :-: |
@@ -302,9 +330,28 @@ while True:
 - **加密归档**：`.rgssad` / `.rgss2a` / `.rgss3a` 需要先解包成 `Data/` 目录再上传。MV/MZ 的加密只针对图片和音频，不影响 `data/*.json`。
 - **导出使用**：解压导出包后覆盖到游戏根目录。如果游戏使用加密归档，需要删除或改名归档文件，让游戏读取散装的 `Data/` 文件。
 
+## 上传大游戏
+
+游戏压缩包通常大部分是图片和音频，真正需要翻译的数据文件只有几 MB 到几十 MB：
+
+- **网页上传 zip**：浏览器只读取压缩包的目录和数据文件条目（`File.slice` 随机读取，不会把整个压缩包读入内存），解压后只上传数据文件。所以即使压缩包超过上传上限也能上传。
+- **选择游戏文件夹**：浏览器按路径筛出 `data` / `Data` / `js/plugins.js` 后再上传。
+- **API 直接上传 zip**：服务端边读边解压（yauzl），只取数据文件，内存占用与压缩包大小无关。单个数据文件解压后超过 512 MB 会被跳过，防止压缩炸弹。
+- **超过上限**：网页会在上传前提示，并建议改用「选择游戏文件夹」；接口返回 413 `FILE_TOO_LARGE`。上限由 `UPLOAD_LIMIT_MB` 控制（默认 2048）。
+- 仅支持普通 zip（存储 / Deflate），加密或其他压缩方式的压缩包需要重新打包。
+
+## 多语言开发
+
+- **共用文案**：`packages/shared/src/i18n/`。服务端生成的文字（错误、校验、枚举、动态、位置说明、解析提示）放在这里，前端也会用到。
+- **界面文案**：`apps/web/src/i18n/ui/`，按页面分区，用 `defineMessages(中文, 英文)` 定义，TypeScript 会检查两种语言的键一致。
+- 插值统一用 `{name}`。`pnpm test` 会检查各语言的键和占位符一致，并检查前端代码引用的键都存在。
+- 新增语言：在 `shared/src/i18n` 加一份文案并登记到 `LOCALES`，再给前端各分区补上对应语言（`defineMessages` 需要相应扩展）。
+- 旧数据兼容：升级前保存的位置说明会在服务启动时从原文件重新提取为结构化数据；旧的动态、提示保留原中文文本。
+
 ## 已知限制与后续计划
 
 - 尚未接入机器翻译，后续可在编辑器侧栏增加 OpenAI 兼容接口、DeepL 等。
 - 暂未提供词条评论和讨论、实时在线状态（WebSocket）。
 - 文件存储目前为本地磁盘（`STORAGE_DIR`），如需对象存储可扩展 `StorageService`。
 - 后台任务默认单并发，适合单实例部署。
+- 界面目前只有简体中文和英文。

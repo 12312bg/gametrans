@@ -1,32 +1,12 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { BATCH_ACTIONS, BatchAction, PERMISSIONS, STAGES, Stage } from '@gametrans/shared';
-import { IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { PERMISSIONS } from '@gametrans/shared';
 import { ApiConflictResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AccessService } from '../common/access.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
-import { EntriesService, EntryFilter } from './entries.service';
+import { T, Translator } from '../common/locale';
+import { BatchDto, FillDto, RollbackDto, UpdateEntryDto } from './entries.dto';
+import { EntriesService, EntryFilter, withContextText } from './entries.service';
 import { EntryModel, PagedEntriesModel } from '../common/api.models';
-
-class UpdateEntryDto {
-  @IsString() @MaxLength(100_000) translation: string;
-  @IsOptional() @IsIn(STAGES as unknown as string[]) stage?: Stage;
-  @IsInt() version: number;
-}
-
-class BatchDto {
-  @IsIn(BATCH_ACTIONS as unknown as string[]) action: BatchAction;
-  @IsOptional() @IsArray() @IsString({ each: true }) ids?: string[];
-  @IsOptional() @IsObject() filter?: EntryFilter;
-}
-
-class RollbackDto {
-  @IsString() historyId: string;
-  @IsInt() version: number;
-}
-
-class FillDto {
-  @IsOptional() @IsString() fileId?: string;
-}
 
 @ApiTags('词条')
 @Controller('projects/:pid')
@@ -51,21 +31,23 @@ export class EntriesController {
   @Get('entries')
   async list(
     @CurrentUser() user: AuthUser | undefined,
+    @T() t: Translator,
     @Param('pid') pid: string,
     @Query() query: EntryFilter & { page?: string; pageSize?: string },
   ) {
     await this.access.require(user, pid, PERMISSIONS.VIEW);
     const { page, pageSize, ...filter } = query;
-    return this.entries.list(pid, filter, page, pageSize);
+    const res = await this.entries.list(pid, filter, page, pageSize);
+    return { ...res, items: res.items.map((e) => withContextText(e, t)) };
   }
 
   @ApiOperation({ summary: '词条详情' })
   @ApiOkResponse({ type: EntryModel })
   @Public()
   @Get('entries/:eid')
-  async get(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string, @Param('eid') eid: string) {
+  async get(@CurrentUser() user: AuthUser | undefined, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string) {
     await this.access.require(user, pid, PERMISSIONS.VIEW);
-    return this.entries.get(pid, eid);
+    return withContextText(await this.entries.get(pid, eid), t);
   }
 
   @ApiOperation({ summary: '前后相邻词条', description: '同一文件中前后各 3 条，用于理解上下文。' })
@@ -80,9 +62,9 @@ export class EntriesController {
   @ApiOkResponse({ type: EntryModel })
   @ApiConflictResponse({ description: '版本冲突，响应包含 message 与 current（最新词条）' })
   @Put('entries/:eid')
-  async update(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: UpdateEntryDto) {
+  async update(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: UpdateEntryDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
-    return this.entries.update(ctx, eid, dto);
+    return withContextText(await this.entries.update(ctx, eid, dto), t);
   }
 
   @ApiOperation({ summary: '批量操作', description: '按 ids 或筛选条件（filter，字段同词条列表）批量审核、锁定、隐藏等；不符合条件的词条会被跳过。' })
@@ -103,9 +85,9 @@ export class EntriesController {
   @ApiOperation({ summary: '回滚到历史版本', description: '需要带上当前 `version`。' })
   @ApiOkResponse({ type: EntryModel })
   @Post('entries/:eid/rollback')
-  async rollback(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: RollbackDto) {
+  async rollback(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: RollbackDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
-    return this.entries.rollback(ctx, eid, dto.historyId, dto.version);
+    return withContextText(await this.entries.rollback(ctx, eid, dto.historyId, dto.version), t);
   }
 
   @ApiOperation({ summary: '翻译记忆推荐', description: '按原文相似度推荐项目内已有译文。' })

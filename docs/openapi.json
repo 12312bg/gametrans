@@ -5,7 +5,7 @@
       "get": {
         "operationId": "AuthController_siteConfig",
         "summary": "站点配置",
-        "description": "是否开放注册、谁可以创建项目。无需登录。",
+        "description": "是否开放注册、谁可以创建项目、单个文件上传上限（MB）。无需登录。",
         "parameters": [],
         "responses": {
           "200": {
@@ -61,7 +61,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -93,7 +100,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -194,7 +208,7 @@
       "patch": {
         "operationId": "UsersController_updateMe",
         "summary": "修改个人资料",
-        "description": "仅限网页登录调用。",
+        "description": "仅限网页登录调用；`locale` 为界面语言。",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -293,7 +307,7 @@
     },
     "/api/admin/stats": {
       "get": {
-        "operationId": "UsersController_adminStats",
+        "operationId": "AdminController_stats",
         "summary": "全站统计",
         "description": "仅超级管理员（网页登录）。",
         "parameters": [],
@@ -309,7 +323,7 @@
     },
     "/api/admin/users": {
       "get": {
-        "operationId": "UsersController_adminUsers",
+        "operationId": "AdminController_list",
         "summary": "用户列表",
         "description": "仅超级管理员（网页登录）。",
         "parameters": [
@@ -351,7 +365,7 @@
     },
     "/api/admin/users/{id}": {
       "patch": {
-        "operationId": "UsersController_adminUpdate",
+        "operationId": "AdminController_update",
         "summary": "封禁 / 解封、设置超级管理员",
         "description": "仅超级管理员（网页登录）。",
         "parameters": [
@@ -386,7 +400,7 @@
     },
     "/api/admin/users/{id}/reset-password": {
       "post": {
-        "operationId": "UsersController_adminResetPassword",
+        "operationId": "AdminController_resetPassword",
         "summary": "重置用户密码",
         "description": "仅超级管理员（网页登录）。",
         "parameters": [
@@ -426,10 +440,23 @@
         "description": "scope=public 公开项目（无需登录）；mine 我参与的；all 全部（仅超级管理员）。",
         "parameters": [
           {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {}
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {}
+          },
+          {
             "name": "engine",
             "required": false,
             "in": "query",
-            "description": "按引擎筛选",
             "schema": {
               "enum": [
                 "RMXP",
@@ -442,28 +469,16 @@
             }
           },
           {
-            "name": "page",
+            "name": "q",
             "required": false,
             "in": "query",
-            "description": "页码，从 1 开始",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "pageSize",
-            "required": false,
-            "in": "query",
-            "description": "每页条数",
-            "schema": {
-              "type": "string"
-            }
+            "description": "按名称 / 简介搜索",
+            "schema": {}
           },
           {
             "name": "scope",
             "required": false,
             "in": "query",
-            "description": "范围",
             "schema": {
               "enum": [
                 "public",
@@ -472,13 +487,6 @@
               ],
               "type": "string"
             }
-          },
-          {
-            "name": "q",
-            "required": false,
-            "in": "query",
-            "description": "按名称 / 简介搜索",
-            "schema": {}
           }
         ],
         "responses": {
@@ -679,8 +687,9 @@
     },
     "/api/projects/{pid}/activity": {
       "get": {
-        "operationId": "ProjectsController_activityList",
+        "operationId": "ProjectsController_activity",
         "summary": "项目动态",
+        "description": "`message` 按请求语言渲染，`type` + `params` 可供客户端自行渲染。",
         "parameters": [
           {
             "name": "pid",
@@ -869,7 +878,6 @@
             "name": "status",
             "required": false,
             "in": "query",
-            "description": "状态",
             "schema": {
               "enum": [
                 "PENDING",
@@ -883,7 +891,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1039,7 +1057,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1086,7 +1114,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1122,7 +1160,14 @@
         ],
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1157,7 +1202,7 @@
       "post": {
         "operationId": "FilesController_upload",
         "summary": "上传文件",
-        "description": "支持多个数据文件、整个游戏目录（配合 paths 字段）或 zip 压缩包。返回解析任务，需轮询任务状态。",
+        "description": "支持多个数据文件、整个游戏目录（配合 paths）或 zip 压缩包（服务端流式解压，只取数据文件）。返回解析任务，需轮询任务状态。",
         "parameters": [
           {
             "name": "pid",
@@ -1338,7 +1383,7 @@
     },
     "/api/projects/{pid}/jobs": {
       "get": {
-        "operationId": "FilesController_jobsList",
+        "operationId": "JobsController_list",
         "summary": "最近的任务",
         "parameters": [
           {
@@ -1353,7 +1398,6 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "任务类型",
             "schema": {
               "enum": [
                 "PARSE",
@@ -1375,9 +1419,9 @@
     },
     "/api/projects/{pid}/jobs/{jid}": {
       "get": {
-        "operationId": "FilesController_jobGet",
+        "operationId": "JobsController_get",
         "summary": "任务状态",
-        "description": "用于轮询解析 / 导出进度。",
+        "description": "用于轮询解析 / 导出进度；`error` 与 `result` 中的 `code` 对应文档中的提示码。",
         "parameters": [
           {
             "name": "pid",
@@ -1706,7 +1750,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1754,6 +1808,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EntryModel"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -1848,7 +1912,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1981,7 +2055,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImportDto"
+                "$ref": "#/components/schemas/ImportTermsDto"
               }
             }
           }
@@ -2128,7 +2202,7 @@
   },
   "info": {
     "title": "GameTrans API",
-    "description": "\nRPG Maker 本地化协作平台的 REST API。所有接口都在 `/api` 下，请求与响应均为 JSON（上传文件使用 `multipart/form-data`）。\n\n## 认证\n\n| 方式 | 用法 | 适用场景 |\n| --- | --- | --- |\n| 网页登录 | `POST /api/auth/login` 后由服务器写入 httpOnly Cookie `gt_token` | 浏览器 |\n| 个人 API 令牌 | 请求头 `Authorization: Bearer gt_xxxxxxxx` | 脚本、CI、机器人 |\n\n个人 API 令牌在网页「个人中心 → API 令牌」中创建，明文只显示一次。\n\n- **只读（READ）**：只能发起 GET / HEAD 请求。\n- **读写（WRITE）**：可以执行本人在项目中的角色允许的全部操作。\n- **项目限定**：创建时可限定到单个项目，之后只能访问 `/api/projects/{该项目}/…` 与 `/api/auth/me`。\n- 令牌**不继承超级管理员权限**；管理令牌、修改密码与资料必须在网页登录后操作。\n- 有效期 7 / 30 / 90 / 365 天，可随时在网页中撤销。\n\n## 错误\n\n出错时返回对应的 HTTP 状态码，响应体格式见 `ErrorModel`，例如 `{\"statusCode\":403,\"message\":\"没有权限执行此操作\",\"error\":\"Forbidden\"}`。参数校验失败时 `message` 可能是字符串数组。\n\n- 401：未登录，或令牌无效 / 已过期\n- 403：没有权限（含只读令牌执行写操作、限定项目的令牌访问其他项目）\n- 404：资源不存在（私有项目对非成员也返回 404）\n- 409：冲突（如保存词条时 `version` 已过期，响应中的 `current` 为最新词条）\n\n## 典型流程\n\n1. `POST /api/projects/{pid}/files` 上传数据文件或 zip，返回解析任务。\n2. 轮询 `GET /api/projects/{pid}/jobs/{jid}`，直到 `status` 为 `SUCCEEDED`。\n3. `GET /api/projects/{pid}/entries?stage=UNTRANSLATED` 分页获取待翻译词条。\n4. `PUT /api/projects/{pid}/entries/{eid}` 提交译文，需带上词条当前的 `version`。\n5. `POST /api/projects/{pid}/exports` 生成导出包，轮询任务完成后通过 `GET /api/projects/{pid}/exports/{jid}/download` 下载。\n",
+    "description": "\nRPG Maker 本地化协作平台的 REST API。所有接口都在 `/api` 下，请求与响应均为 JSON（上传文件使用 `multipart/form-data`）。\n\n## 认证\n\n| 方式 | 用法 | 适用场景 |\n| --- | --- | --- |\n| 网页登录 | `POST /api/auth/login` 后由服务器写入 httpOnly Cookie `gt_token` | 浏览器 |\n| 个人 API 令牌 | 请求头 `Authorization: Bearer gt_xxxxxxxx` | 脚本、CI、机器人 |\n\n个人 API 令牌在网页「个人中心 → API 令牌」中创建，明文只显示一次。\n\n- **只读（READ）**：只能发起 GET / HEAD 请求。\n- **读写（WRITE）**：可以执行本人在项目中的角色允许的全部操作。\n- **项目限定**：创建时可限定到单个项目，之后只能访问 `/api/projects/{该项目}/…` 与 `/api/auth/me`。\n- 令牌**不继承超级管理员权限**；管理令牌、修改密码与资料必须在网页登录后操作。\n- 有效期 7 / 30 / 90 / 365 天，可随时在网页中撤销。\n\n## 多语言\n\n错误提示、项目动态、词条位置说明按请求语言返回：`Accept-Language` 请求头 → 账号设置的界面语言 → 简体中文。目前支持 `zh-CN` 与 `en`。\n\n## 错误\n\n出错时返回对应的 HTTP 状态码，响应体格式见 `ErrorModel`，例如 `{\"statusCode\":403,\"code\":\"FORBIDDEN\",\"message\":\"没有权限执行此操作\"}`。程序判断请使用稳定的 `code`，`message` 会随语言变化。\n\n- 400：参数错误（`VALIDATION_FAILED`，`params.field` 为出错字段）\n- 401：未登录，或令牌无效 / 已过期\n- 403：没有权限（含只读令牌执行写操作、限定项目的令牌访问其他项目）\n- 404：资源不存在（私有项目对非成员也返回 404）\n- 409：冲突（如 `ENTRY_CONFLICT`：保存词条时 `version` 已过期，响应中的 `current` 为最新词条）\n- 413：`FILE_TOO_LARGE`，超过单个文件上传上限（`params.limit`，MB，见 `GET /api/auth/config`）\n\n## 典型流程\n\n1. `POST /api/projects/{pid}/files` 上传数据文件或 zip，返回解析任务。\n2. 轮询 `GET /api/projects/{pid}/jobs/{jid}`，直到 `status` 为 `SUCCEEDED`。\n3. `GET /api/projects/{pid}/entries?stage=UNTRANSLATED` 分页获取待翻译词条。\n4. `PUT /api/projects/{pid}/entries/{eid}` 提交译文，需带上词条当前的 `version`。\n5. `POST /api/projects/{pid}/exports` 生成导出包，轮询任务完成后通过 `GET /api/projects/{pid}/exports/{jid}/download` 下载。\n",
     "version": "0.1.0",
     "contact": {}
   },
@@ -2212,6 +2286,14 @@
             "type": "string",
             "minLength": 0,
             "maxLength": 32
+          },
+          "locale": {
+            "type": "string",
+            "description": "界面语言，注册时记录到账号",
+            "enum": [
+              "zh-CN",
+              "en"
+            ]
           }
         },
         "required": [
@@ -2225,6 +2307,7 @@
         "properties": {
           "login": {
             "type": "string",
+            "description": "用户名或邮箱",
             "minLength": 1,
             "maxLength": 128
           },
@@ -2327,6 +2410,7 @@
           "expiresInDays": {
             "type": "number",
             "description": "有效期（天）：7 / 30 / 90 / 365，默认 90",
+            "default": 90,
             "enum": [
               7,
               30,
@@ -2429,6 +2513,14 @@
           },
           "email": {
             "type": "string"
+          },
+          "locale": {
+            "type": "string",
+            "description": "界面语言",
+            "enum": [
+              "zh-CN",
+              "en"
+            ]
           }
         }
       },
@@ -2833,6 +2925,7 @@
         "properties": {
           "role": {
             "type": "string",
+            "description": "默认翻译员",
             "enum": [
               "ADMIN",
               "REVIEWER",
@@ -2847,6 +2940,7 @@
         "properties": {
           "username": {
             "type": "string",
+            "description": "用户名或邮箱",
             "minLength": 1,
             "maxLength": 128
           },
@@ -2926,6 +3020,22 @@
           "finishedAt"
         ]
       },
+      "ContextPartModel": {
+        "type": "object",
+        "properties": {
+          "p": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "k": {
+            "type": "string",
+            "description": "文案键，如 ctx.event"
+          }
+        },
+        "required": [
+          "k"
+        ]
+      },
       "UserBriefModel": {
         "type": "object",
         "properties": {
@@ -2960,6 +3070,14 @@
       "EntryModel": {
         "type": "object",
         "properties": {
+          "contextData": {
+            "nullable": true,
+            "description": "结构化位置说明；旧数据为 null",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextPartModel"
+            }
+          },
           "category": {
             "type": "string",
             "enum": [
@@ -3022,9 +3140,9 @@
           "translation": {
             "type": "string"
           },
-          "context": {
+          "contextText": {
             "type": "string",
-            "description": "位置说明（地图、事件、页、指令等）"
+            "description": "按请求语言渲染的位置说明"
           },
           "danger": {
             "type": "boolean",
@@ -3046,6 +3164,7 @@
           }
         },
         "required": [
+          "contextData",
           "category",
           "stage",
           "translator",
@@ -3055,7 +3174,7 @@
           "key",
           "original",
           "translation",
-          "context",
+          "contextText",
           "danger",
           "version",
           "sortOrder",
@@ -3098,6 +3217,7 @@
           },
           "stage": {
             "type": "string",
+            "description": "不传时自动推断：有译文 → 已翻译，清空 → 未翻译",
             "enum": [
               "UNTRANSLATED",
               "TRANSLATED",
@@ -3108,7 +3228,8 @@
             ]
           },
           "version": {
-            "type": "number"
+            "type": "number",
+            "description": "词条当前的 version（乐观锁）"
           }
         },
         "required": [
@@ -3133,13 +3254,15 @@
             ]
           },
           "ids": {
+            "description": "指定词条；与 filter 二选一",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
           "filter": {
-            "type": "object"
+            "type": "object",
+            "description": "筛选条件，字段同词条列表的查询参数"
           }
         },
         "required": [
@@ -3165,7 +3288,8 @@
         "type": "object",
         "properties": {
           "fileId": {
-            "type": "string"
+            "type": "string",
+            "description": "只填充该文件；不填表示整个项目"
           }
         }
       },
@@ -3217,16 +3341,17 @@
           }
         }
       },
-      "ImportDto": {
+      "ImportTermsDto": {
         "type": "object",
         "properties": {
           "text": {
             "type": "string",
-            "description": "每行「术语<Tab或逗号>译法[<Tab或逗号>备注]」",
+            "description": "每行「术语<Tab 或逗号>译法[<Tab 或逗号>备注]」，# 开头的行忽略",
             "maxLength": 2000000
           },
           "overwrite": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "已存在的术语是否用导入的译法覆盖"
           }
         },
         "required": [
@@ -3237,6 +3362,7 @@
         "type": "object",
         "properties": {
           "fileIds": {
+            "description": "文件范围，不填表示全部文件",
             "type": "array",
             "items": {
               "type": "string"
@@ -3244,6 +3370,7 @@
           },
           "stages": {
             "type": "string",
+            "description": "写入哪些状态的译文",
             "enum": [
               "TRANSLATED",
               "QUESTIONED",
@@ -3252,7 +3379,8 @@
             ]
           },
           "includeJson": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "附带 ParaTranz 兼容的译文 JSON"
           }
         },
         "required": [
@@ -3262,30 +3390,28 @@
       "ErrorModel": {
         "type": "object",
         "properties": {
+          "code": {
+            "type": "string",
+            "description": "稳定的错误码，如 FORBIDDEN、ENTRY_CONFLICT、FILE_TOO_LARGE，适合程序判断",
+            "example": "FORBIDDEN"
+          },
           "message": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            ],
+            "type": "string",
+            "description": "按请求语言（Accept-Language → 账号设置 → 简体中文）翻译的提示",
             "example": "没有权限执行此操作"
+          },
+          "params": {
+            "type": "object",
+            "description": "错误参数，如 VALIDATION_FAILED 的 field、FILE_TOO_LARGE 的 limit",
+            "additionalProperties": true
           },
           "statusCode": {
             "type": "number",
             "description": "HTTP 状态码"
-          },
-          "error": {
-            "type": "string",
-            "description": "错误类型，如 Forbidden、Not Found"
           }
         },
         "required": [
+          "code",
           "message",
           "statusCode"
         ]

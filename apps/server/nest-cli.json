@@ -12,7 +12,6 @@
           "introspectComments": true,
           "dtoFileNameSuffix": [
             ".dto.ts",
-            ".controller.ts",
             ".models.ts"
           ],
           "controllerFileNameSuffix": ".controller.ts"

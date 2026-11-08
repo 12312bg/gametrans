@@ -32,6 +32,8 @@ const env = {
   ADMIN_PASSWORD: 'admin123456',
   ALLOW_REGISTRATION: 'true',
   PROJECT_CREATION: 'everyone',
+  // 调小上传上限，便于测试超限提示与浏览器端解压
+  UPLOAD_LIMIT_MB: '64',
 };
 
 // 存储目录仅供 E2E 使用，每次运行前清空

@@ -1,176 +1,43 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsBoolean, IsEmail, IsOptional, IsString, Length } from 'class-validator';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { AuthService, PUBLIC_USER_SELECT } from '../auth/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { AuthUser, CurrentUser, SessionOnly } from '../common/decorators';
-import { escapeLike, pageParams } from '../common/pagination';
-import { PrismaService } from '../prisma/prisma.service';
+import { ChangePasswordDto, UpdateMeDto } from './users.dto';
+import { UsersService } from './users.service';
 
-class UpdateMeDto {
-  @IsOptional() @IsString() @Length(1, 32) displayName?: string;
-  @IsOptional() @IsString() @Length(0, 500) bio?: string;
-  @IsOptional() @IsEmail({}, { message: '邮箱格式不正确' }) email?: string;
-}
-
-class ChangePasswordDto {
-  @IsString() oldPassword: string;
-  @IsString() @Length(8, 72, { message: '密码长度为 8-72 个字符' }) newPassword: string;
-}
-
-class AdminUpdateUserDto {
-  @IsOptional() @IsBoolean() isSuperAdmin?: boolean;
-  @IsOptional() @IsBoolean() isBanned?: boolean;
-}
-
-class ResetPasswordDto {
-  @IsString() @Length(8, 72, { message: '密码长度为 8-72 个字符' }) password: string;
-}
-
-@Controller()
+@ApiTags('用户')
+@Controller('users')
 export class UsersController {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly users: UsersService,
     private readonly auth: AuthService,
   ) {}
 
-  @ApiOperation({ summary: '修改个人资料', description: '仅限网页登录调用。' })
-  @ApiTags('用户')
+  @ApiOperation({ summary: '修改个人资料', description: '仅限网页登录调用；`locale` 为界面语言。' })
   @SessionOnly()
-  @Patch('users/me')
-  async updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
-    if (dto.email) {
-      const email = dto.email.toLowerCase();
-      const dup = await this.prisma.user.findFirst({ where: { email, NOT: { id: user.id } } });
-      if (dup) throw new ConflictException('该邮箱已被注册');
-      dto.email = email;
-    }
-    return this.prisma.user.update({ where: { id: user.id }, data: dto, select: PUBLIC_USER_SELECT });
+  @Patch('me')
+  updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
+    return this.users.updateMe(user.id, dto);
   }
 
   @ApiOperation({ summary: '修改密码', description: '仅限网页登录调用。' })
-  @ApiTags('用户')
   @SessionOnly()
-  @Post('users/me/password')
+  @Post('me/password')
   async changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
     await this.auth.changePassword(user.id, dto.oldPassword, dto.newPassword);
     return { ok: true };
   }
 
-  /** 邀请成员时的用户搜索 */
   @ApiOperation({ summary: '搜索用户', description: '按用户名或昵称搜索，用于邀请成员，最多返回 10 条。' })
-  @ApiTags('用户')
   @ApiQuery({ name: 'q', required: false, description: '关键字' })
-  @Get('users/search')
+  @Get('search')
   search(@Query('q') q = '') {
-    const term = escapeLike(q.trim());
-    if (!term) return [];
-    return this.prisma.user.findMany({
-      where: {
-        isBanned: false,
-        OR: [
-          { username: { contains: term, mode: 'insensitive' } },
-          { displayName: { contains: term, mode: 'insensitive' } },
-        ],
-      },
-      select: { id: true, username: true, displayName: true },
-      take: 10,
-      orderBy: { username: 'asc' },
-    });
+    return this.users.search(q);
   }
 
   @ApiOperation({ summary: '用户主页', description: '公开资料、参与的项目与贡献统计。' })
-  @ApiTags('用户')
-  @Get('users/:username')
-  async profile(@Param('username') username: string, @CurrentUser() viewer: AuthUser) {
-    const user = await this.prisma.user.findUnique({
-      where: { username },
-      select: { id: true, username: true, displayName: true, bio: true, createdAt: true },
-    });
-    if (!user) throw new BadRequestException('用户不存在');
-    const memberships = await this.prisma.projectMember.findMany({
-      where: {
-        userId: user.id,
-        project: viewer.isSuperAdmin ? {} : { OR: [{ visibility: 'PUBLIC' }, { members: { some: { userId: viewer.id } } }] },
-      },
-      include: { project: { select: { id: true, name: true, engine: true, targetLang: true } } },
-      orderBy: { joinedAt: 'desc' },
-    });
-    const [translated, reviewed] = await Promise.all([
-      this.prisma.entry.count({ where: { translatorId: user.id } }),
-      this.prisma.entry.count({ where: { reviewerId: user.id } }),
-    ]);
-    return { ...user, memberships, stats: { translated, reviewed } };
-  }
-
-  // ───────── 超级管理员 ─────────
-
-  private ensureAdmin(user: AuthUser) {
-    if (!user.isSuperAdmin) throw new ForbiddenException('仅超级管理员可访问');
-  }
-
-  @ApiOperation({ summary: '全站统计', description: '仅超级管理员（网页登录）。' })
-  @ApiTags('管理后台')
-  @Get('admin/stats')
-  async adminStats(@CurrentUser() user: AuthUser) {
-    this.ensureAdmin(user);
-    const [users, projects, entries, files] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.project.count(),
-      this.prisma.entry.count(),
-      this.prisma.file.count(),
-    ]);
-    return { users, projects, entries, files };
-  }
-
-  @ApiOperation({ summary: '用户列表', description: '仅超级管理员（网页登录）。' })
-  @ApiTags('管理后台')
-  @ApiQuery({ name: 'pageSize', required: false, description: '每页条数' })
-  @ApiQuery({ name: 'page', required: false, description: '页码，从 1 开始' })
-  @ApiQuery({ name: 'q', required: false, description: '按用户名 / 邮箱 / 昵称搜索' })
-  @Get('admin/users')
-  async adminUsers(@CurrentUser() user: AuthUser, @Query('q') q = '', @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
-    this.ensureAdmin(user);
-    const { skip, take, ...p } = pageParams(page, pageSize);
-    const like = escapeLike(q.trim());
-    const where = like
-      ? {
-          OR: [
-            { username: { contains: like, mode: 'insensitive' as const } },
-            { email: { contains: like, mode: 'insensitive' as const } },
-            { displayName: { contains: like, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
-    const [items, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-        select: { ...PUBLIC_USER_SELECT, isBanned: true, _count: { select: { memberships: true } } },
-      }),
-      this.prisma.user.count({ where }),
-    ]);
-    return { items, total, ...p };
-  }
-
-  @ApiOperation({ summary: '封禁 / 解封、设置超级管理员', description: '仅超级管理员（网页登录）。' })
-  @ApiTags('管理后台')
-  @Patch('admin/users/:id')
-  async adminUpdate(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AdminUpdateUserDto) {
-    this.ensureAdmin(user);
-    if (id === user.id && (dto.isSuperAdmin === false || dto.isBanned)) {
-      throw new BadRequestException('不能取消自己的超级管理员身份或封禁自己');
-    }
-    return this.prisma.user.update({ where: { id }, data: dto, select: { ...PUBLIC_USER_SELECT, isBanned: true } });
-  }
-
-  @ApiOperation({ summary: '重置用户密码', description: '仅超级管理员（网页登录）。' })
-  @ApiTags('管理后台')
-  @Post('admin/users/:id/reset-password')
-  async adminResetPassword(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ResetPasswordDto) {
-    this.ensureAdmin(user);
-    await this.prisma.user.update({ where: { id }, data: { passwordHash: await this.auth.hash(dto.password) } });
-    return { ok: true };
+  @Get(':username')
+  profile(@Param('username') username: string, @CurrentUser() viewer: AuthUser) {
+    return this.users.profile(username, viewer);
   }
 }

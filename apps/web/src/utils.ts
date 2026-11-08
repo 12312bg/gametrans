@@ -1,11 +1,9 @@
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/zh-cn';
 import { STAGES, Stage } from '@gametrans/shared';
 import type { StageCounts } from './api/types';
 
 dayjs.extend(relativeTime);
-dayjs.locale('zh-cn');
 
 export const fromNow = (d: string | Date) => dayjs(d).fromNow();
 export const formatTime = (d: string | Date) => dayjs(d).format('YYYY-MM-DD HH:mm');

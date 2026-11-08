@@ -1,25 +1,19 @@
 import { CheckOutlined, CloseOutlined, LogoutOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Badge, Button, Card, Empty, Form, List, Modal, Popconfirm, Select, Space, Table, Tabs, Typography } from 'antd';
-import { PERMISSIONS, PROJECT_ROLES, ProjectRole, ROLE_LABELS, canManageMember } from '@gametrans/shared';
+import { PERMISSIONS, PROJECT_ROLES, ProjectRole, canManageMember } from '@gametrans/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, qs } from '../../api/client';
 import { useProject } from '../../api/project';
 import type { Invitation, JoinRequest, Member, UserBrief } from '../../api/types';
-import { useAuth } from '../../auth';
 import { RoleTag, UserAvatar } from '../../components/Tags';
+import { useT } from '../../i18n';
+import { useAuth } from '../../providers/AuthProvider';
 import { errorMessage, fromNow } from '../../utils';
 
-const ROLE_DESC: Record<ProjectRole, string> = {
-  OWNER: '拥有全部权限，可转让、删除项目',
-  ADMIN: '管理文件、成员、导出、项目设置，可锁定/隐藏词条',
-  REVIEWER: '翻译 + 审核定稿、修改已审核词条、维护术语表',
-  TRANSLATOR: '翻译未审核的词条、标记疑问',
-  VIEWER: '只读浏览，可下载导出包',
-};
-
 export default function MembersPage() {
+  const t = useT();
   const { project, has } = useProject();
   const pid = project.id;
   const { user } = useAuth();
@@ -57,10 +51,10 @@ export default function MembersPage() {
     qc.invalidateQueries({ queryKey: ['project', pid] });
   };
 
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
+  const run = async (fn: () => Promise<unknown>, okKey: string) => {
     try {
       await fn();
-      message.success(ok);
+      message.success(t(okKey));
       refresh();
     } catch (e) {
       message.error(errorMessage(e));
@@ -71,7 +65,7 @@ export default function MembersPage() {
 
   const invite = async () => {
     const v = await form.validateFields();
-    await run(() => api(`/projects/${pid}/invitations`, { method: 'POST', body: v }), '邀请已发送，对方接受后即可加入');
+    await run(() => api(`/projects/${pid}/invitations`, { method: 'POST', body: v }), 'members.inviteSent');
     setInviteOpen(false);
     form.resetFields();
   };
@@ -87,23 +81,23 @@ export default function MembersPage() {
       scroll={{ x: 640 }}
       columns={[
         {
-          title: '成员',
+          title: t('members.col.member'),
           render: (_, m) => (
             <Space>
               <UserAvatar user={m.user} size={32} />
               <div>
                 <div>
-                  <b>{m.user.displayName}</b> {m.userId === user?.id && <Typography.Text type="secondary">（我）</Typography.Text>}
+                  <b>{m.user.displayName}</b> {m.userId === user?.id && <Typography.Text type="secondary">{t('common.me')}</Typography.Text>}
                 </div>
                 <Typography.Text type="secondary" className="small">
-                  @{m.user.username} · {fromNow(m.joinedAt)}加入
+                  @{m.user.username} · {t('members.joined', { time: fromNow(m.joinedAt) })}
                 </Typography.Text>
               </div>
             </Space>
           ),
         },
         {
-          title: '角色',
+          title: t('members.col.role'),
           width: 180,
           render: (_, m) =>
             canManage && m.userId !== user?.id && canManageMember(project.myRole, isSuper, m.role) ? (
@@ -111,45 +105,45 @@ export default function MembersPage() {
                 size="small"
                 style={{ width: 120 }}
                 value={m.role}
-                onChange={(role) => run(() => api(`/projects/${pid}/members/${m.userId}`, { method: 'PATCH', body: { role } }), '角色已更新')}
-                options={assignable.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                onChange={(role) => run(() => api(`/projects/${pid}/members/${m.userId}`, { method: 'PATCH', body: { role } }), 'members.roleUpdated')}
+                options={assignable.map((r) => ({ value: r, label: t(`role.${r}`) }))}
               />
             ) : (
               <RoleTag role={m.role} />
             ),
         },
-        { title: '翻译', dataIndex: 'translated', width: 90, sorter: (a, b) => a.translated - b.translated },
-        { title: '审核', dataIndex: 'reviewed', width: 90, sorter: (a, b) => a.reviewed - b.reviewed },
+        { title: t('members.col.translated'), dataIndex: 'translated', width: 90, sorter: (a, b) => a.translated - b.translated },
+        { title: t('members.col.reviewed'), dataIndex: 'reviewed', width: 90, sorter: (a, b) => a.reviewed - b.reviewed },
         {
           title: '',
           width: 110,
           render: (_, m) =>
             m.role === 'OWNER' ? null : m.userId === user?.id ? (
               <Popconfirm
-                title="退出该项目？"
-                okText="退出"
+                title={t('members.leaveConfirm')}
+                okText={t('members.leave')}
                 okButtonProps={{ danger: true }}
                 onConfirm={() =>
                   run(async () => {
                     await api(`/projects/${pid}/members/${m.userId}`, { method: 'DELETE' });
                     nav('/');
-                  }, '已退出项目')
+                  }, 'members.left')
                 }
               >
                 <Button size="small" type="text" danger icon={<LogoutOutlined />}>
-                  退出
+                  {t('members.leave')}
                 </Button>
               </Popconfirm>
             ) : canManage && canManageMember(project.myRole, isSuper, m.role) ? (
               <Popconfirm
-                title={`将 ${m.user.displayName} 移出项目？`}
-                description="其已提交的译文会保留。"
-                okText="移出"
+                title={t('members.removeConfirm', { name: m.user.displayName })}
+                description={t('members.removeDesc')}
+                okText={t('members.remove')}
                 okButtonProps={{ danger: true }}
-                onConfirm={() => run(() => api(`/projects/${pid}/members/${m.userId}`, { method: 'DELETE' }), '已移出')}
+                onConfirm={() => run(() => api(`/projects/${pid}/members/${m.userId}`, { method: 'DELETE' }), 'members.removed')}
               >
                 <Button size="small" type="text" danger>
-                  移出
+                  {t('members.remove')}
                 </Button>
               </Popconfirm>
             ) : null,
@@ -161,11 +155,11 @@ export default function MembersPage() {
   return (
     <Card
       variant="borderless"
-      title={`成员（${members.data?.length ?? 0}）`}
+      title={t('members.title', { count: members.data?.length ?? 0 })}
       extra={
         canManage && (
           <Button type="primary" icon={<UserAddOutlined />} onClick={() => setInviteOpen(true)}>
-            邀请成员
+            {t('members.invite')}
           </Button>
         )
       }
@@ -173,12 +167,12 @@ export default function MembersPage() {
       {canManage ? (
         <Tabs
           items={[
-            { key: 'members', label: '成员列表', children: memberTable },
+            { key: 'members', label: t('members.tab.list'), children: memberTable },
             {
               key: 'requests',
               label: (
                 <Space size={6}>
-                  加入申请 <Badge count={pendingCount} size="small" />
+                  {t('members.tab.requests')} <Badge count={pendingCount} size="small" />
                 </Space>
               ),
               children: requests.data?.length ? (
@@ -192,7 +186,7 @@ export default function MembersPage() {
                             size="small"
                             value={reqRoles[r.id] ?? 'TRANSLATOR'}
                             style={{ width: 110 }}
-                            options={assignable.map((x) => ({ value: x, label: ROLE_LABELS[x] }))}
+                            options={assignable.map((x) => ({ value: x, label: t(`role.${x}`) }))}
                             onChange={(v) => setReqRoles((m) => ({ ...m, [r.id]: v }))}
                           />
                           <Button
@@ -206,18 +200,18 @@ export default function MembersPage() {
                                     method: 'POST',
                                     body: { role: reqRoles[r.id] ?? 'TRANSLATOR' },
                                   }),
-                                '已批准',
+                                'members.approved',
                               )
                             }
                           >
-                            批准
+                            {t('members.approve')}
                           </Button>
                           <Button
                             size="small"
                             icon={<CloseOutlined />}
-                            onClick={() => run(() => api(`/projects/${pid}/join-requests/${r.id}/reject`, { method: 'POST' }), '已拒绝')}
+                            onClick={() => run(() => api(`/projects/${pid}/join-requests/${r.id}/reject`, { method: 'POST' }), 'members.rejected')}
                           >
-                            拒绝
+                            {t('members.reject')}
                           </Button>
                         </Space>,
                       ]}
@@ -232,18 +226,18 @@ export default function MembersPage() {
                             </Typography.Text>
                           </Space>
                         }
-                        description={<span className="pre-wrap">{r.message || '（未填写申请说明）'}</span>}
+                        description={<span className="pre-wrap">{r.message || t('members.noMessage')}</span>}
                       />
                     </List.Item>
                   )}
                 />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有待处理的申请" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('members.noRequests')} />
               ),
             },
             {
               key: 'invitations',
-              label: `已发出的邀请${invitations.data?.length ? `（${invitations.data.length}）` : ''}`,
+              label: invitations.data?.length ? t('members.tab.invitationsCount', { count: invitations.data.length }) : t('members.tab.invitations'),
               children: invitations.data?.length ? (
                 <List
                   dataSource={invitations.data}
@@ -253,9 +247,9 @@ export default function MembersPage() {
                         <Button
                           key="c"
                           size="small"
-                          onClick={() => run(() => api(`/projects/${pid}/invitations/${inv.id}`, { method: 'DELETE' }), '已撤回邀请')}
+                          onClick={() => run(() => api(`/projects/${pid}/invitations/${inv.id}`, { method: 'DELETE' }), 'members.withdrawn')}
                         >
-                          撤回
+                          {t('members.withdraw')}
                         </Button>,
                       ]}
                     >
@@ -264,14 +258,14 @@ export default function MembersPage() {
                         <b>{inv.invitee?.displayName}</b>
                         <RoleTag role={inv.role} />
                         <Typography.Text type="secondary" className="small">
-                          由 {inv.inviter?.displayName} 于 {fromNow(inv.createdAt)}邀请
+                          {t('members.invitedBy', { name: inv.inviter?.displayName ?? '', time: fromNow(inv.createdAt) })}
                         </Typography.Text>
                       </Space>
                     </List.Item>
                   )}
                 />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有待接受的邀请" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('members.noInvitations')} />
               ),
             },
           ]}
@@ -284,30 +278,30 @@ export default function MembersPage() {
         {PROJECT_ROLES.map((r) => (
           <div key={r}>
             <RoleTag role={r} />
-            <span className="muted small">{ROLE_DESC[r]}</span>
+            <span className="muted small">{t(`roleDesc.${r}`)}</span>
           </div>
         ))}
       </div>
 
-      <Modal title="邀请成员" open={inviteOpen} onCancel={() => setInviteOpen(false)} onOk={invite} okText="发送邀请" destroyOnHidden>
+      <Modal title={t('members.invite')} open={inviteOpen} onCancel={() => setInviteOpen(false)} onOk={invite} okText={t('members.sendInvite')} destroyOnHidden>
         <Form form={form} layout="vertical" initialValues={{ role: 'TRANSLATOR' }} preserve={false}>
-          <Form.Item name="username" label="用户" rules={[{ required: true, message: '请选择或输入用户名' }]}>
+          <Form.Item name="username" label={t('members.user')} rules={[{ required: true, message: t('members.userRequired') }]}>
             <Select
               showSearch
-              placeholder="输入用户名或昵称搜索"
+              placeholder={t('members.userSearch')}
               filterOption={false}
               onSearch={setSearchQ}
-              notFoundContent={searchQ ? '没有找到用户' : '输入关键字搜索'}
+              notFoundContent={t(searchQ ? 'members.userNotFound' : 'members.typeToSearch')}
               options={(userSearch.data ?? []).map((u) => ({ value: u.username, label: `${u.displayName} (@${u.username})` }))}
             />
           </Form.Item>
-          <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+          <Form.Item name="role" label={t('members.col.role')} rules={[{ required: true }]}>
             <Select
               options={assignable.map((r) => ({
                 value: r,
                 label: (
                   <span>
-                    {ROLE_LABELS[r]} <span className="muted small">— {ROLE_DESC[r]}</span>
+                    {t(`role.${r}`)} <span className="muted small">— {t(`roleDesc.${r}`)}</span>
                   </span>
                 ),
               }))}

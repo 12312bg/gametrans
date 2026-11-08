@@ -1,4 +1,4 @@
-import type { Engine, EntryCategory, JobStatus, Permission, ProjectRole, Stage } from '@gametrans/shared';
+import type { ContextPart, Engine, EntryCategory, Issue, JobStatus, Params, Permission, ProjectRole, Stage } from '@gametrans/shared';
 
 export interface UserBrief {
   id: string;
@@ -10,6 +10,7 @@ export interface Me extends UserBrief {
   email: string;
   bio: string;
   isSuperAdmin: boolean;
+  locale: string | null;
   createdAt: string;
   pendingInvitations: number;
 }
@@ -56,7 +57,8 @@ export interface FileItem {
   format: string;
   size: number;
   sha256: string;
-  warnings: string[];
+  /** 旧数据为中文字符串 */
+  warnings: (Issue | string)[];
   createdAt: string;
   updatedAt: string;
   stats: StageCounts;
@@ -68,7 +70,10 @@ export interface Entry {
   key: string;
   original: string;
   translation: string;
-  context: string;
+  /** 结构化位置说明，旧数据为 null */
+  contextData: ContextPart[] | null;
+  /** 服务端按请求语言渲染的位置说明 */
+  contextText: string;
   category: EntryCategory;
   danger: boolean;
   stage: Stage;
@@ -151,10 +156,13 @@ export interface Invitation {
   project?: { id: string; name: string; engine: Engine; sourceLang: string; targetLang: string };
 }
 
+/** 旧版任务结果只有中文 reason / message */
+export type ResultIssue = Partial<Issue> & { name: string; reason?: string; message?: string };
+
 export interface ParseResultData {
   files: { path: string; status: 'created' | 'updated' | 'unchanged'; total: number; added: number; changed: number; removed: number }[];
-  skipped: { name: string; reason: string }[];
-  errors: { name: string; message: string }[];
+  skipped: ResultIssue[];
+  errors: ResultIssue[];
 }
 
 export interface ExportResultData {
@@ -162,7 +170,7 @@ export interface ExportResultData {
   size: number;
   fileCount: number;
   applied: number;
-  errors: { name: string; message: string }[];
+  errors: ResultIssue[];
 }
 
 export interface Job<R = unknown> {
@@ -189,6 +197,7 @@ export interface ProjectStats {
 export interface Activity {
   id: string;
   type: string;
+  params: Params | null;
   message: string;
   createdAt: string;
   user: UserBrief | null;
@@ -206,6 +215,7 @@ export interface AdminUser extends UserBrief {
 export interface SiteConfig {
   allowRegistration: boolean;
   projectCreation: 'everyone' | 'superadmin';
+  uploadLimitMb: number;
 }
 
 export interface ApiToken {

@@ -2,15 +2,28 @@
  * OpenAPI 文档使用的响应模型（仅用于生成文档与客户端代码，不参与运行时校验）。
  * 文件名以 .models.ts 结尾，由 @nestjs/swagger 的 CLI 插件自动生成属性元数据。
  */
-import { ApiProperty } from '@nestjs/swagger';
+import { applyDecorators } from '@nestjs/common';
+import { ApiProperty, ApiQuery } from '@nestjs/swagger';
 
 export class ErrorModel {
   /** HTTP 状态码 */
   statusCode: number;
-  @ApiProperty({ oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }], example: '没有权限执行此操作' })
-  message: string | string[];
-  /** 错误类型，如 Forbidden、Not Found */
-  error?: string;
+  /** 稳定的错误码，如 FORBIDDEN、ENTRY_CONFLICT、FILE_TOO_LARGE，适合程序判断 */
+  @ApiProperty({ example: 'FORBIDDEN' })
+  code: string;
+  /** 按请求语言（Accept-Language → 账号设置 → 简体中文）翻译的提示 */
+  @ApiProperty({ example: '没有权限执行此操作' })
+  message: string;
+  /** 错误参数，如 VALIDATION_FAILED 的 field、FILE_TOO_LARGE 的 limit */
+  @ApiProperty({ type: 'object', additionalProperties: true, required: false })
+  params?: Record<string, string | number>;
+}
+
+export class ContextPartModel {
+  /** 文案键，如 ctx.event */
+  k: string;
+  @ApiProperty({ type: 'object', additionalProperties: true, required: false })
+  p?: Record<string, string | number>;
 }
 
 export class UserBriefModel {
@@ -68,8 +81,11 @@ export class EntryModel {
   key: string;
   original: string;
   translation: string;
-  /** 位置说明（地图、事件、页、指令等） */
-  context: string;
+  /** 结构化位置说明；旧数据为 null */
+  @ApiProperty({ type: [ContextPartModel], nullable: true })
+  contextData: ContextPartModel[] | null;
+  /** 按请求语言渲染的位置说明 */
+  contextText: string;
   @ApiProperty({
     enum: ['dialogue', 'choice', 'scroll', 'speaker', 'name', 'nickname', 'description', 'message', 'system', 'map', 'note', 'script', 'plugin', 'other'],
   })
@@ -142,3 +158,10 @@ export class CreatedTokenModel extends TokenModel {
 export class OkModel {
   ok: boolean;
 }
+
+/** 分页参数 page / pageSize 的文档装饰器 */
+export const ApiPaging = () =>
+  applyDecorators(
+    ApiQuery({ name: 'page', required: false, description: '页码，从 1 开始' }),
+    ApiQuery({ name: 'pageSize', required: false, description: '每页条数' }),
+  );

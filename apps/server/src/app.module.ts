@@ -1,28 +1,22 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import { AuthController } from './auth/auth.controller';
-import { AuthService } from './auth/auth.service';
-import { TokensController } from './auth/tokens.controller';
-import { TokensService } from './auth/tokens.service';
+import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './common/auth.guard';
 import { CommonModule } from './common/common.module';
+import { AllExceptionsFilter } from './common/exception.filter';
 import { config } from './config';
-import { EntriesController } from './entries/entries.controller';
-import { EntriesService } from './entries/entries.service';
-import { ExportsController } from './exports/exports.controller';
-import { FilesController } from './files/files.controller';
-import { ExportService } from './jobs/export.service';
-import { JobsProcessor } from './jobs/jobs.processor';
-import { JOB_QUEUE, JobsService } from './jobs/jobs.service';
-import { ParseService } from './jobs/parse.service';
-import { MembersController } from './members/members.controller';
-import { PrismaModule } from './prisma/prisma.service';
-import { ProjectsController } from './projects/projects.controller';
-import { TermsController } from './terms/terms.controller';
-import { UsersController } from './users/users.controller';
+import { EntriesModule } from './entries/entries.module';
+import { ExportsModule } from './exports/exports.module';
+import { FilesModule } from './files/files.module';
+import { JobsModule } from './jobs/jobs.module';
+import { MembersModule } from './members/members.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { ProjectsModule } from './projects/projects.module';
+import { TermsModule } from './terms/terms.module';
+import { UsersModule } from './users/users.module';
 
 function redisConnection(url: string) {
   const u = new URL(url);
@@ -42,31 +36,20 @@ function redisConnection(url: string) {
     CommonModule,
     JwtModule.register({ global: true, secret: config.jwtSecret }),
     BullModule.forRoot({ connection: redisConnection(config.redisUrl), prefix: 'gametrans' }),
-    BullModule.registerQueue({ name: JOB_QUEUE }),
-    ...(config.staticDir
-      ? [ServeStaticModule.forRoot({ rootPath: config.staticDir, exclude: ['/api/(.*)'] })]
-      : []),
-  ],
-  controllers: [
-    AuthController,
-    TokensController,
-    UsersController,
-    ProjectsController,
-    MembersController,
-    FilesController,
-    EntriesController,
-    TermsController,
-    ExportsController,
+    ...(config.staticDir ? [ServeStaticModule.forRoot({ rootPath: config.staticDir, exclude: ['/api/(.*)'] })] : []),
+    AuthModule,
+    UsersModule,
+    ProjectsModule,
+    MembersModule,
+    FilesModule,
+    JobsModule,
+    EntriesModule,
+    TermsModule,
+    ExportsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
-    AuthService,
-    TokensService,
-    EntriesService,
-    JobsService,
-    ParseService,
-    ExportService,
-    JobsProcessor,
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
 export class AppModule {}

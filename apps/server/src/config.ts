@@ -9,7 +9,8 @@ export const config = {
   jwtExpiresDays: Number(process.env.JWT_EXPIRES_DAYS ?? 14),
   storageDir: resolve(process.env.STORAGE_DIR ?? './storage'),
   staticDir: process.env.STATIC_DIR ? resolve(process.env.STATIC_DIR) : undefined,
-  uploadLimitMb: Number(process.env.UPLOAD_LIMIT_MB ?? 512),
+  /** 服务端流式解压 zip，不再整包读入内存，可以放宽上限 */
+  uploadLimitMb: Number(process.env.UPLOAD_LIMIT_MB ?? 2048),
   cookieSecure: bool(process.env.COOKIE_SECURE, false),
   allowRegistration: bool(process.env.ALLOW_REGISTRATION, true),
   /** everyone：任何登录用户都可创建项目；superadmin：仅超级管理员 */

@@ -1,5 +1,5 @@
 import { devices } from '@playwright/test';
-import { btn, createUser, expect, loginApi, openEditor, pageAs, seedProject, test, textarea, toast, uid, useAs } from './helpers';
+import { activeItem, btn, createUser, expect, loginApi, openEditor, pageAs, pickOption, seedProject, test, textarea, toast, uid, useAs } from './helpers';
 
 test('深色模式切换并在刷新后保持', async ({ page }) => {
   await page.goto('/');
@@ -102,4 +102,31 @@ test('所有项目页面都能正常打开（无 JS 错误）', async ({ page })
   await page.goto('/me');
   await page.waitForLoadState('networkidle');
   await expect(page.getByRole('tab', { name: /项目邀请/ })).toBeVisible();
+});
+
+test('翻译页切换每页条数：保持当前词条，刷新后仍生效', async ({ page }) => {
+  const u = await createUser('size');
+  const p = await seedProject(u);
+  await useAs(page, u);
+  await openEditor(page, p.id);
+  const items = page.locator('.entry-item');
+  await expect(page.locator('.list-head')).toContainText('共 32 条');
+  await expect(items).toHaveCount(32);
+
+  await items.filter({ hasText: '#25' }).click();
+  const original = await page.locator('.original-text').innerText();
+  await page.locator('.list-foot .ant-pagination-options .ant-select').click();
+  await pickOption(page, '20 条/页');
+  // 第 25 条在每页 20 条时位于第 2 页
+  await expect(items).toHaveCount(12);
+  await expect(activeItem(page)).toContainText('#25');
+  await expect(page.locator('.original-text')).toHaveText(original);
+  await expect(page).toHaveURL(/size=20/);
+
+  // 记住选择：不带参数重新打开仍是每页 20 条
+  await openEditor(page, p.id);
+  await expect(items).toHaveCount(20);
+  await page.locator('.list-foot .ant-pagination-next').click();
+  await expect(items).toHaveCount(12);
+  await expect(activeItem(page)).toContainText('#21');
 });

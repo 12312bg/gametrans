@@ -5,7 +5,7 @@ import { PERMISSIONS, Stage } from '@gametrans/shared';
 import { useState } from 'react';
 import { api } from '../../api/client';
 import { useProject } from '../../api/project';
-import type { ExportResultData, FileItem, Job } from '../../api/types';
+import type { Attachment, ExportResultData, FileItem, Job } from '../../api/types';
 import { StageDot } from '../../components/Tags';
 import { useT } from '../../i18n';
 import { issueText, jobErrorText } from '../../i18n/format';
@@ -17,6 +17,7 @@ interface ExportForm {
   stages: Stage[];
   fileIds: string[];
   includeJson: boolean;
+  includeAttachments: boolean;
 }
 
 export default function ExportsPage() {
@@ -30,6 +31,8 @@ export default function ExportsPage() {
   const [form] = Form.useForm<ExportForm>();
 
   const files = useQuery({ queryKey: ['files', pid], queryFn: () => api<FileItem[]>(`/projects/${pid}/files`), enabled: canCreate });
+  const attachments = useQuery({ queryKey: ['attachments', pid], queryFn: () => api<Attachment[]>(`/projects/${pid}/attachments`), enabled: canCreate });
+  const attachmentCount = attachments.data?.length ?? 0;
   const exports = useQuery({
     queryKey: ['exports', pid],
     queryFn: () => api<Job<ExportResultData>[]>(`/projects/${pid}/exports`),
@@ -41,7 +44,7 @@ export default function ExportsPage() {
     try {
       await api(`/projects/${pid}/exports`, {
         method: 'POST',
-        body: { stages: v.stages, fileIds: v.fileIds?.length ? v.fileIds : undefined, includeJson: v.includeJson },
+        body: { stages: v.stages, fileIds: v.fileIds?.length ? v.fileIds : undefined, includeJson: v.includeJson, includeAttachments: v.includeAttachments },
       });
       message.success(t('exports.started'));
       qc.invalidateQueries({ queryKey: ['exports', pid] });
@@ -61,7 +64,7 @@ export default function ExportsPage() {
               form={form}
               layout="vertical"
               onFinish={create}
-              initialValues={{ stages: EXPORTABLE, fileIds: [], includeJson: false }}
+              initialValues={{ stages: EXPORTABLE, fileIds: [], includeJson: false, includeAttachments: true }}
             >
               <Form.Item name="stages" label={t('exports.stages')} rules={[{ required: true, message: t('exports.stagesRequired') }]}>
                 <Checkbox.Group>
@@ -87,8 +90,11 @@ export default function ExportsPage() {
                   optionFilterProp="label"
                 />
               </Form.Item>
-              <Form.Item name="includeJson" valuePropName="checked">
+              <Form.Item name="includeJson" valuePropName="checked" style={{ marginBottom: attachmentCount ? 8 : undefined }}>
                 <Checkbox>{t('exports.includeJson')}</Checkbox>
+              </Form.Item>
+              <Form.Item name="includeAttachments" valuePropName="checked" hidden={!attachmentCount}>
+                <Checkbox>{t('exports.includeAttachments', { count: attachmentCount })}</Checkbox>
               </Form.Item>
               <Button type="primary" htmlType="submit" icon={<ExportOutlined />} loading={busy} block>
                 {t('exports.create')}
@@ -147,6 +153,7 @@ export default function ExportsPage() {
                       ))}
                       {j.payload?.fileIds?.length ? <Tag bordered={false}>{t('exports.fileCount', { count: j.payload.fileIds.length })}</Tag> : null}
                       {j.payload?.includeJson && <Tag bordered={false}>{t('exports.withJson')}</Tag>}
+                      {!!j.result?.attachmentCount && <Tag bordered={false}>{t('exports.withAttachments', { count: j.result.attachmentCount })}</Tag>}
                     </Space>
                     {j.result && (
                       <div className="muted small" style={{ marginTop: 4 }}>

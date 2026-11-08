@@ -7,7 +7,7 @@ import { MarshalError, MarshalReader } from '../marshal/reader';
 import { IvarList, RHash, RObject, RString, RValue, decodeUtf8, encodeUtf8, numOf, strOf } from '../marshal/types';
 import { dump } from '../marshal/writer';
 import { ParseOptions, ParsedDocument, Slot, UnsupportedFileError } from '../types';
-import { escapeForQuote, findRubyStrings } from './ruby-lexer';
+import { emitScriptStrings } from '../script-strings';
 
 const nonBlank = (s: string | undefined): s is string => typeof s === 'string' && s.trim() !== '';
 
@@ -103,7 +103,7 @@ export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument
   };
   const events = (holder: unknown, keyPrefix: string, label: ContextPart[]) => {
     const list = listOf(holder);
-    if (list) walkEventList(list, ad, { keyPrefix, label, xpStyle }, walk);
+    if (list) walkEventList(list, ad, { keyPrefix, label, xpStyle, scriptLang: 'ruby', scriptOperand: engine === 'RMVXACE' }, walk);
   };
   const idOf = (o: RObject) => numOf(o.get('id')) ?? 0;
   const nameOf = (o: RObject) => strOf(o.get('name')) ?? '';
@@ -166,6 +166,8 @@ const SYSTEM_ARRAYS: [string, string][] = [
   ['skill_types', 'skillTypes'],
   ['weapon_types', 'weaponTypes'],
   ['armor_types', 'armorTypes'],
+  ['variables', 'variables'],
+  ['switches', 'switches'],
 ];
 
 function walkSystem(sys: RObject, slots: Slot[], defIvars: IvarList | undefined): void {
@@ -174,12 +176,13 @@ function walkSystem(sys: RObject, slots: Slot[], defIvars: IvarList | undefined)
   const push = (holder: RValue[] | RObject, field: number | string, key: string, ...parts: ContextPart[]) => {
     const text = strOf(get(holder, field));
     if (!nonBlank(text)) return;
+    const variable = key.startsWith('variables/') || key.startsWith('switches/');
     slots.push({
       key,
       original: text,
       context: [sysPart, ...parts],
-      category: 'system',
-      danger: false,
+      category: variable ? 'variable' : 'system',
+      danger: variable,
       set: (nv) => {
         const cur = get(holder, field);
         if (cur instanceof RString) cur.text = nv;
@@ -220,28 +223,13 @@ function walkScripts(root: RValue[], slots: Slot[], walk: WalkContext, warnings:
       warnings.push({ code: 'SCRIPT_INFLATE_FAILED', params: { index, name } });
       return;
     }
-    const literals = findRubyStrings(code);
-    const replacements = new Map<number, string>();
-    const scriptPart = c.of('ctx.script', { index, name });
-    literals.forEach((lit, n) => {
-      slots.push({
-        key: `${index}/${n}`,
-        original: lit.content,
-        context: [scriptPart, c.of('ctx.line', { n: lit.line })],
-        category: 'script',
-        danger: true,
-        set: (v) => replacements.set(n, escapeForQuote(v, lit.quote)),
-      });
-    });
-    walk.finalizers.push(() => {
-      if (!replacements.size) return;
-      let out = code;
-      // 从后往前替换，避免偏移变化
-      for (let n = literals.length - 1; n >= 0; n--) {
-        const rep = replacements.get(n);
-        if (rep !== undefined) out = out.slice(0, literals[n].start) + rep + out.slice(literals[n].end);
-      }
-      codeObj.bytes = zlibSync(encodeUtf8(out));
+    emitScriptStrings(walk, {
+      code,
+      lang: 'ruby',
+      keyPrefix: `${index}/`,
+      context: [c.of('ctx.script', { index, name })],
+      lineNumbers: true,
+      apply: (out) => (codeObj.bytes = zlibSync(encodeUtf8(out))),
     });
   });
 }

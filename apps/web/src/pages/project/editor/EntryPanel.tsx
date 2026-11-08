@@ -10,17 +10,19 @@ import {
   UnlockOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Dropdown, Input, Space, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { useQueryClient } from '@tanstack/react-query';
+import { Alert, App, Button, Dropdown, Input, Space, Tabs, Tag, Tooltip, Typography } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { Engine, PERMISSIONS, Permission, Stage, missingControlCodes } from '@gametrans/shared';
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { api } from '../../../api/client';
 import type { Entry, HistoryItem, Term } from '../../../api/types';
 import { StageTag, UserAvatar } from '../../../components/Tags';
 import { TFn, useT } from '../../../i18n';
 import { contextText } from '../../../i18n/format';
-import { fromNow } from '../../../utils';
+import { errorMessage, fromNow } from '../../../utils';
 import { Highlighted, findTerms } from './highlight';
-import { ContextTab, HistoryTab, TMTab, TermsTab } from './SidePanels';
+import { ContextTab, HistoryTab, LinkedTab, TMTab, TermsTab, useLinked } from './SidePanels';
 
 export interface EntryPanelHandle {
   focus(): void;
@@ -44,7 +46,7 @@ interface Props {
 }
 
 const lineCount = (s: string) => (s === '' ? 0 : s.split('\n').length);
-const DANGER_HINT: Record<string, string> = { script: 'entry.warnScript', plugin: 'entry.warnPlugin' };
+const DANGER_HINT: Record<string, string> = { script: 'entry.warnScript', plugin: 'entry.warnPlugin', variable: 'entry.warnVariable' };
 
 interface QaItem {
   type: 'warning' | 'info';
@@ -74,6 +76,49 @@ function qaCheck(entry: Entry, draft: string, engine: Engine, matched: Term[], t
   return out;
 }
 
+/** 原文相同的脚本 / 插件字符串：提示译文不一致并可一键同步 */
+function LinkedNotice({ pid, entry, others, canEdit, dirty }: { pid: string; entry: Entry; others: Entry[]; canEdit: boolean; dirty: boolean }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const { message } = App.useApp();
+  const [busy, setBusy] = useState(false);
+  const differ = others.filter((e) => e.translation !== entry.translation || e.stage !== entry.stage).length;
+  const sync = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ affected: number; skipped: number }>(`/projects/${pid}/entries/${entry.id}/sync`, { method: 'POST' });
+      message.success(r.skipped ? t('linked.syncedSkipped', { count: r.affected, skipped: r.skipped }) : t('linked.synced', { count: r.affected }));
+      for (const key of ['linked', 'entries', 'entry', 'project', 'files']) qc.invalidateQueries({ queryKey: key === 'linked' ? [key] : [key, pid] });
+    } catch (e) {
+      message.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Alert
+      className="entry-alert linked-notice"
+      type={differ ? 'warning' : 'info'}
+      showIcon
+      message={
+        <span>
+          {t('linked.notice', { count: others.length })}
+          {differ > 0 && ` ${t('linked.differ', { count: differ })}`}
+        </span>
+      }
+      action={
+        canEdit && differ > 0 ? (
+          <Tooltip title={dirty || !entry.translation ? t('linked.saveFirst') : undefined}>
+            <Button size="small" loading={busy} disabled={dirty || !entry.translation} onClick={sync}>
+              {t('linked.sync', { count: differ })}
+            </Button>
+          </Tooltip>
+        ) : undefined
+      }
+    />
+  );
+}
+
 export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPanel(props, ref) {
   const { pid, engine, entry, draft, onDraft, terms, has, canEdit, saving, onSave } = props;
   const t = useT();
@@ -95,6 +140,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
   useImperativeHandle(ref, () => ({ focus: () => taRef.current?.focus({ cursor: 'end' }) }));
 
   const { matched } = useMemo(() => findTerms(entry.original, terms), [entry.original, terms]);
+  const linked = useLinked(pid, entry).data ?? [];
   const qa = useMemo(() => qaCheck(entry, draft, engine, matched, t), [entry, draft, engine, matched, t]);
 
   const stage = entry.stage;
@@ -133,6 +179,8 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
       {entry.danger && (
         <Alert type="warning" showIcon icon={<WarningOutlined />} className="entry-alert" message={t(DANGER_HINT[entry.category] ?? 'entry.warnNote')} />
       )}
+
+      {linked.length > 0 && <LinkedNotice pid={pid} entry={entry} others={linked} canEdit={canEdit} dirty={dirty} />}
 
       <div className="text-block">
         <div className="text-block-head">
@@ -243,7 +291,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
       <Tabs
         className="side-tabs"
         size="small"
-        activeKey={props.sideTab}
+        activeKey={props.sideTab === 'linked' && !linked.length ? 'tm' : props.sideTab}
         onChange={props.onSideTab}
         items={[
           { key: 'tm', label: t('side.tm'), children: <TMTab pid={pid} entry={entry} onUse={onDraft} canEdit={canEdit} /> },
@@ -254,6 +302,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
           },
           { key: 'context', label: t('side.context'), children: <ContextTab pid={pid} entry={entry} onJump={props.onJump} /> },
           { key: 'history', label: t('side.history'), children: <HistoryTab pid={pid} entry={entry} canEdit={canEdit} onRollback={props.onRollback} /> },
+          ...(linked.length ? [{ key: 'linked', label: t('linked.tab', { count: linked.length }), children: <LinkedTab items={linked} onJump={props.onJump} /> }] : []),
         ]}
       />
     </div>

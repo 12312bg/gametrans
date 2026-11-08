@@ -1,6 +1,7 @@
 import type { ContextPart, EntryCategory } from '@gametrans/shared';
 import type { Slot } from './types';
 import { emitPluginValue } from './plugin-params';
+import { ScriptLang, emitScriptStrings } from './script-strings';
 
 /** 事件指令访问适配器：MV/MZ（JSON）与 XP/VX/Ace（Marshal）共用遍历逻辑 */
 export interface CommandAdapter<C> {
@@ -28,7 +29,12 @@ export interface EventListInfo {
   label: ContextPart[];
   /** XP 的「显示文章」(101) 自身携带第一行 */
   xpStyle: boolean;
+  scriptLang: ScriptLang;
+  /** 「控制变量」的操作数 4 是脚本（VX Ace、MV、MZ）；XP / VX 中 4 是角色 */
+  scriptOperand: boolean;
 }
+
+const snippet = (code: string) => (code.length > 80 ? `${code.slice(0, 79)}…` : code);
 
 const nonBlank = (s: string | undefined): s is string => typeof s === 'string' && s.trim() !== '';
 
@@ -84,8 +90,46 @@ export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventLi
       }
       case 355: {
         const lines = collect(i + 1, 655);
-        emitLines(list, ad, ctx, { key, context: at({ k: 'ctx.cmd.script' }), category: 'script', danger: true, header: c, headerHoldsFirst: true, lines, lineCode: 655 });
+        const write = lineWriter(list, ad, c, true, lines, 655);
+        const code = [c, ...lines].map((l) => ad.str(l, 0) ?? '').join('\n');
+        emitScriptStrings(ctx, {
+          code,
+          lang: info.scriptLang,
+          keyPrefix: `${key}/s/`,
+          context: at({ k: 'ctx.cmd.script' }),
+          lineNumbers: lines.length > 0,
+          apply: (out) => write(out.split('\n')),
+        });
         i += lines.length;
+        break;
+      }
+      case 111: {
+        // 条件分支：类型 12 为脚本条件，常见如 $gameVariables.value(2) === "Night"
+        const code = ad.param(c, 0) === 12 ? ad.str(c, 1) : undefined;
+        if (!nonBlank(code)) break;
+        emitScriptStrings(ctx, {
+          code,
+          lang: info.scriptLang,
+          keyPrefix: `${key}/s/`,
+          context: at({ k: 'ctx.cmd.conditionScript' }, { k: 'ctx.raw', p: { text: snippet(code) } }),
+          lineNumbers: false,
+          apply: (out) => ad.setStr(c, 1, out),
+        });
+        break;
+      }
+      case 122: {
+        // 控制变量：[起始, 结束, 运算, 操作数类型, 脚本]
+        const code = info.scriptOperand && ad.param(c, 3) === 4 ? ad.str(c, 4) : undefined;
+        if (!nonBlank(code)) break;
+        const [from, to] = [ad.param(c, 0), ad.param(c, 1)];
+        emitScriptStrings(ctx, {
+          code,
+          lang: info.scriptLang,
+          keyPrefix: `${key}/s/`,
+          context: at({ k: 'ctx.cmd.controlVariable', p: { id: from === to ? String(from) : `${String(from)}-${String(to)}` } }, { k: 'ctx.raw', p: { text: snippet(code) } }),
+          lineNumbers: false,
+          apply: (out) => ad.setStr(c, 4, out),
+        });
         break;
       }
       case 102: {
@@ -155,7 +199,7 @@ interface LinesSpec<C> {
   category: EntryCategory;
   danger: boolean;
   header: C;
-  /** 首行存放在 header 指令中（XP 的 101、所有引擎的 355） */
+  /** 首行存放在 header 指令中（XP 的 101） */
   headerHoldsFirst: boolean;
   lines: C[];
   lineCode: number;
@@ -168,34 +212,39 @@ function emitLines<C>(list: C[], ad: CommandAdapter<C>, ctx: WalkContext, spec: 
   const text = parts.join('\n');
   if (!text.trim()) return;
 
-  let current = spec.lines.slice();
+  const write = lineWriter(list, ad, header, headerHoldsFirst, spec.lines, spec.lineCode);
   ctx.emit({
     key: spec.key,
     original: text,
     context: spec.context,
     category: spec.category,
     danger: spec.danger,
-    set: (value) => {
-      const newLines = value.replace(/\r\n?/g, '\n').split('\n');
-      let rest = newLines;
-      if (headerHoldsFirst) {
-        ad.setStr(header, 0, newLines[0]);
-        rest = newLines.slice(1);
-      }
-      const n = Math.min(rest.length, current.length);
-      for (let k = 0; k < n; k++) ad.setStr(current[k], 0, rest[k]);
-      if (rest.length > current.length) {
-        const anchor = current.length ? current[current.length - 1] : header;
-        const added = rest.slice(current.length).map((t) => ad.makeLine(anchor, spec.lineCode, t));
-        list.splice(list.indexOf(anchor) + 1, 0, ...added);
-        current = current.concat(added);
-      } else if (rest.length < current.length) {
-        for (const r of current.slice(rest.length)) {
-          const idx = list.indexOf(r);
-          if (idx >= 0) list.splice(idx, 1);
-        }
-        current = current.slice(0, rest.length);
-      }
-    },
+    set: (value) => write(value.replace(/\r\n?/g, '\n').split('\n')),
   });
+}
+
+/** 按新的行数写回：首行（可选）写入 header，其余写入续行指令并增删 */
+function lineWriter<C>(list: C[], ad: CommandAdapter<C>, header: C, headerHoldsFirst: boolean, lines: C[], lineCode: number) {
+  let current = lines.slice();
+  return (newLines: string[]) => {
+    let rest = newLines;
+    if (headerHoldsFirst) {
+      ad.setStr(header, 0, newLines[0]);
+      rest = newLines.slice(1);
+    }
+    const n = Math.min(rest.length, current.length);
+    for (let k = 0; k < n; k++) ad.setStr(current[k], 0, rest[k]);
+    if (rest.length > current.length) {
+      const anchor = current.length ? current[current.length - 1] : header;
+      const added = rest.slice(current.length).map((t) => ad.makeLine(anchor, lineCode, t));
+      list.splice(list.indexOf(anchor) + 1, 0, ...added);
+      current = current.concat(added);
+    } else if (rest.length < current.length) {
+      for (const r of current.slice(rest.length)) {
+        const idx = list.indexOf(r);
+        if (idx >= 0) list.splice(idx, 1);
+      }
+      current = current.slice(0, rest.length);
+    }
+  };
 }

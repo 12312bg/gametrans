@@ -4,8 +4,10 @@ import {
   BatchAction,
   ContextPart,
   ENTRY_CATEGORIES,
+  LINKED_CATEGORIES,
   STAGES,
   Stage,
+  can,
   formatContext,
   permissionForTransition,
   permissionToEdit,
@@ -308,6 +310,53 @@ export class EntriesService {
       await this.activity.log(projectId, userId, 'entries.batch', { action, count: rows.length });
     }
     return { affected: rows.length };
+  }
+
+  /** 原文相同的其他脚本 / 插件字符串（同一个值常在一处赋值、另一处比较） */
+  async linked(projectId: string, id: string) {
+    const e = await this.get(projectId, id);
+    if (!LINKED_CATEGORIES.includes(e.category as never)) return [];
+    return this.prisma.entry.findMany({
+      where: { projectId, original: e.original, category: { in: LINKED_CATEGORIES }, id: { not: id } },
+      orderBy: [{ file: { path: 'asc' } }, { sortOrder: 'asc' }],
+      take: 200,
+      select: ENTRY_SELECT,
+    });
+  }
+
+  /** 把该词条的译文与状态复制到原文相同的脚本 / 插件字符串；无权修改的跳过 */
+  async syncLinked(ctx: ProjectContext, id: string) {
+    const projectId = ctx.project.id;
+    const userId = ctx.user!.id;
+    const src = await this.prisma.entry.findFirst({ where: { id, projectId } });
+    if (!src) throw fail('ENTRY_NOT_FOUND');
+    if (!LINKED_CATEGORIES.includes(src.category as never) || !src.translation) return { affected: 0, skipped: 0 };
+    const to = src.stage as Stage;
+    const targets = await this.prisma.entry.findMany({
+      where: { projectId, original: src.original, category: { in: LINKED_CATEGORIES }, id: { not: id } },
+      select: { id: true, stage: true, translation: true },
+    });
+    const pending = targets.filter((x) => x.translation !== src.translation || x.stage !== to);
+    const allowed = pending.filter((x) => {
+      const from = x.stage as Stage;
+      const tp = permissionForTransition(from, to);
+      return can(ctx, permissionToEdit(from)) && (!tp || can(ctx, tp));
+    });
+    if (allowed.length) {
+      const ids = allowed.map((x) => x.id);
+      const data: Prisma.EntryUncheckedUpdateManyInput = { translation: src.translation, stage: to, translatorId: userId, version: { increment: 1 }, updatedAt: new Date() };
+      if (to === 'REVIEWED') data.reviewerId = userId;
+      else if (to !== 'LOCKED') data.reviewerId = null;
+      await this.prisma.$transaction([
+        this.prisma.entry.updateMany({ where: { id: { in: ids } }, data }),
+        this.prisma.entryHistory.createMany({
+          data: ids.map((entryId) => ({ entryId, projectId, userId, action: 'SYNC', translation: src.translation, stage: to })),
+        }),
+      ]);
+      const text = src.original.length > 30 ? `${src.original.slice(0, 30)}…` : src.original;
+      await this.activity.log(projectId, userId, 'entries.sync', { text, count: ids.length });
+    }
+    return { affected: allowed.length, skipped: pending.length - allowed.length };
   }
 
   /** 翻译记忆：按原文三元组相似度推荐项目内已有译文 */

@@ -35,14 +35,17 @@ export const BATCH_ACTION_PERMISSION: Record<BatchAction, Permission> = {
 
 export const ENTRY_CATEGORIES = [
   'dialogue', 'choice', 'scroll', 'speaker', 'name', 'nickname', 'description',
-  'message', 'system', 'map', 'note', 'script', 'plugin', 'other',
+  'message', 'system', 'map', 'variable', 'note', 'script', 'plugin', 'other',
 ] as const;
 export type EntryCategory = (typeof ENTRY_CATEGORIES)[number];
 
 /** 默认隐藏的危险分类 */
-export const DANGER_CATEGORIES: EntryCategory[] = ['note', 'script', 'plugin'];
+export const DANGER_CATEGORIES: EntryCategory[] = ['variable', 'note', 'script', 'plugin'];
 
-export const HISTORY_ACTIONS = ['TRANSLATE', 'STAGE', 'ROLLBACK', 'TM_FILL', 'IMPORT', 'SOURCE_CHANGED', 'BATCH'] as const;
+/** 原文相同时译文需要保持一致的分类：脚本里赋值与比较的往往是同一个值 */
+export const LINKED_CATEGORIES: EntryCategory[] = ['script', 'plugin'];
+
+export const HISTORY_ACTIONS = ['TRANSLATE', 'STAGE', 'ROLLBACK', 'TM_FILL', 'IMPORT', 'SOURCE_CHANGED', 'BATCH', 'SYNC'] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
 export const JOB_TYPES = ['PARSE', 'EXPORT'] as const;

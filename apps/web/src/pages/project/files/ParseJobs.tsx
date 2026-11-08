@@ -78,6 +78,11 @@ export function ParseJobs({ jobs }: { jobs: Job<ParseResultData>[] }) {
                   <LoadingOutlined />
                 )}
                 <span>{j.createdBy?.displayName}</span>
+                {j.payload?.reextract && (
+                  <Tag bordered={false} color="blue">
+                    {t('jobs.reextract')}
+                  </Tag>
+                )}
                 <Typography.Text type="secondary">{fromNow(j.createdAt)}</Typography.Text>
                 {(j.status === 'RUNNING' || j.status === 'QUEUED') && <Progress percent={j.progress} size="small" style={{ width: 160, margin: 0 }} />}
               </Space>

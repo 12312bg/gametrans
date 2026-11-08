@@ -11,4 +11,6 @@ export class CreateExportDto {
   @IsArray() @ArrayNotEmpty({ message: 'validation.exportStages' }) @IsIn(EXPORTABLE_STAGES, { each: true }) stages: string[];
   /** 附带 ParaTranz 兼容的译文 JSON */
   @IsOptional() @IsBoolean() includeJson?: boolean;
+  /** 一同导出项目附件，默认 true */
+  @IsOptional() @IsBoolean() includeAttachments?: boolean;
 }

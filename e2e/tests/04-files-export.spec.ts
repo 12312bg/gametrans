@@ -67,7 +67,13 @@ test('上传新版本文件：保留译文，原文变化的词条标记为有�
   const row = page.getByRole('row').filter({ hasText: 'data/Map001.json' });
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), row.getByRole('button', { name: 'swap' }).click()]);
   await chooser.setFiles({ name: 'Map001.json', mimeType: 'application/json', buffer: Buffer.from(modified) });
-  await expect(toast(page, '已提交 data/Map001.json 的新版本')).toBeVisible();
+  // 先预览变更，确认后才导入
+  const dialog = page.getByRole('dialog').filter({ hasText: '导入前确认变更' });
+  await expect(dialog).toContainText('原文变更 1 条', { timeout: 30_000 });
+  await dialog.locator('.ant-table-row-expand-icon').click();
+  await expect(dialog.locator('.preview-before')).toHaveText('またね');
+  await btn(dialog, '确认导入').click();
+  await expect(toast(page, '已确认，正在后台导入')).toBeVisible();
   const job = page.locator('.job-result').first();
   await expect(job).toContainText('更新 1', { timeout: 30_000 });
   await expect(job).toContainText('原文变更 1');

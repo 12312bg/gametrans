@@ -6,6 +6,7 @@ import { ExtractedEntry, ParsedDocument, UnsupportedFileError } from './types';
 export * from './types';
 export * as marshal from './marshal';
 export { findRubyStrings, escapeForQuote } from './rgss/ruby-lexer';
+export { findJsStrings, escapeJsString } from './script-strings';
 export { detectKind } from './kinds';
 export { stringifyLike } from './mvmz';
 

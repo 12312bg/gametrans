@@ -1,12 +1,12 @@
 import { RollbackOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Empty, List, Popconfirm, Space, Spin, Tag, Tooltip, Typography } from 'antd';
-import { hasMessage } from '@gametrans/shared';
+import { LINKED_CATEGORIES, hasMessage } from '@gametrans/shared';
 import { api } from '../../../api/client';
 import type { Entry, HistoryItem, Neighbor, Suggestion, Term } from '../../../api/types';
 import { StageDot, StageTag, UserAvatar } from '../../../components/Tags';
 import { useT } from '../../../i18n';
-import { historyNote } from '../../../i18n/format';
+import { contextText, historyNote } from '../../../i18n/format';
 import { formatTime, fromNow } from '../../../utils';
 import { CodesOnly } from './highlight';
 
@@ -16,6 +16,37 @@ const Loading = () => (
   </div>
 );
 const Nothing = ({ text }: { text: string }) => <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={text} />;
+
+/** 原文相同的其他脚本 / 插件字符串；其他分类不请求 */
+export function useLinked(pid: string, entry: Entry) {
+  return useQuery({
+    queryKey: ['linked', entry.id, entry.version],
+    queryFn: () => api<Entry[]>(`/projects/${pid}/entries/${entry.id}/linked`),
+    enabled: LINKED_CATEGORIES.includes(entry.category),
+  });
+}
+
+export function LinkedTab({ items, onJump }: { items: Entry[]; onJump: (id: string) => void }) {
+  const t = useT();
+  return (
+    <div className="ctx-list">
+      {items.map((e) => (
+        <div key={e.id} className="ctx-row" onClick={() => onJump(e.id)}>
+          <StageDot stage={e.stage} />
+          <div className="ctx-text">
+            <div className="muted small">
+              {e.file.path} · {contextText(e, t)}
+            </div>
+            <div className="pre-wrap">{e.translation || <span className="muted">{t('editor.untranslated')}</span>}</div>
+          </div>
+        </div>
+      ))}
+      <Typography.Paragraph type="secondary" className="small" style={{ marginTop: 8 }}>
+        {t('linked.hint')}
+      </Typography.Paragraph>
+    </div>
+  );
+}
 
 export function TermsTab({ matched, onInsert, canEdit }: { matched: Term[]; onInsert: (t: string) => void; canEdit: boolean }) {
   const t = useT();

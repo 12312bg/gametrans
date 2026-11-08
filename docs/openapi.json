@@ -1211,6 +1211,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "preview",
+            "required": false,
+            "in": "query",
+            "description": "为 true 时只生成变更预览，确认后调用 POST /jobs/{jid}/apply 导入",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1277,6 +1290,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "preview",
+            "required": false,
+            "in": "query",
+            "description": "为 true 时只生成变更预览，确认后调用 POST /jobs/{jid}/apply 导入",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1298,6 +1324,38 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files/reextract": {
+      "post": {
+        "operationId": "FilesController_reextract",
+        "summary": "重新提取文本",
+        "description": "用当前的提取规则重新解析项目中已上传的原文件。已有译文按键名保留；新提取的词条（如变量名、脚本字符串）默认隐藏；原文件中已不存在的词条会被删除。返回解析任务。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": "",
@@ -1454,6 +1512,241 @@
         },
         "tags": [
           "文件与任务"
+        ]
+      },
+      "delete": {
+        "operationId": "JobsController_discard",
+        "summary": "取消导入预览",
+        "description": "删除预览任务与本次上传的临时文件。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/jobs/{jid}/apply": {
+      "post": {
+        "operationId": "JobsController_apply",
+        "summary": "确认导入预览",
+        "description": "上传时带 `preview=true` 会先生成预览任务（`result.preview` 为 true，列出每个文件的新增 / 原文变更 / 删除）。确认后用同一批文件执行导入，返回新的解析任务。预览保留 24 小时。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/attachments": {
+      "get": {
+        "operationId": "AttachmentsController_list",
+        "summary": "附件列表",
+        "description": "附件不参与翻译，导出时按路径原样放入导出包。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AttachmentModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      },
+      "post": {
+        "operationId": "AttachmentsController_upload",
+        "summary": "上传附件",
+        "description": "上传到 dir 目录（相对游戏根目录，如 www/img；不存在的子目录会自动创建）。数据文件及其所在目录的路径已锁定，附件不能与之同名；同一路径的附件会被覆盖。需要文件管理权限。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  },
+                  "dir": {
+                    "type": "string",
+                    "description": "目标目录，留空为游戏根目录",
+                    "example": "www/img"
+                  },
+                  "paths": {
+                    "type": "string",
+                    "description": "可选，与 files 一一对应的相对路径 JSON 数组（上传文件夹时保留子目录）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentUploadModel"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      }
+    },
+    "/api/projects/{pid}/attachments/{aid}/download": {
+      "get": {
+        "operationId": "AttachmentsController_download",
+        "summary": "下载附件",
+        "description": "需要文件管理权限；其他成员通过导出包获取附件。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      }
+    },
+    "/api/projects/{pid}/attachments/{aid}": {
+      "delete": {
+        "operationId": "AttachmentsController_remove",
+        "summary": "删除附件",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "附件"
         ]
       }
     },
@@ -1715,6 +2008,82 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/linked": {
+      "get": {
+        "operationId": "EntriesController_linked",
+        "summary": "相同原文的脚本 / 插件字符串",
+        "description": "脚本里赋值和比较的往往是同一个值（如赋值 \"Normal\" 后在条件分支中判断），这些词条的译文需要保持一致。其他分类返回空数组。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EntryModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/sync": {
+      "post": {
+        "operationId": "EntriesController_sync",
+        "summary": "同步译文到相同的脚本 / 插件字符串",
+        "description": "把该词条已保存的译文与状态复制到原文相同的脚本 / 插件字符串；没有权限修改的词条计入 skipped。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -2230,6 +2599,10 @@
     {
       "name": "术语表",
       "description": "项目术语的维护与导入"
+    },
+    {
+      "name": "附件",
+      "description": "与数据文件一起导出的其他文件，如 www/img/Quests.txt"
     },
     {
       "name": "导出",
@@ -3020,22 +3393,6 @@
           "finishedAt"
         ]
       },
-      "ContextPartModel": {
-        "type": "object",
-        "properties": {
-          "p": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "k": {
-            "type": "string",
-            "description": "文案键，如 ctx.event"
-          }
-        },
-        "required": [
-          "k"
-        ]
-      },
       "UserBriefModel": {
         "type": "object",
         "properties": {
@@ -3053,6 +3410,89 @@
           "id",
           "username",
           "displayName"
+        ]
+      },
+      "AttachmentModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "相对游戏根目录的路径，如 www/img/Quests.txt"
+          },
+          "size": {
+            "type": "number"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserBriefModel"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "size",
+          "sha256",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AttachmentUploadModel": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "number",
+            "description": "新增的附件数"
+          },
+          "updated": {
+            "type": "number",
+            "description": "覆盖的同路径附件数"
+          },
+          "items": {
+            "description": "上传后的全部附件",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentModel"
+            }
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "items"
+        ]
+      },
+      "ContextPartModel": {
+        "type": "object",
+        "properties": {
+          "p": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "k": {
+            "type": "string",
+            "description": "文案键，如 ctx.event"
+          }
+        },
+        "required": [
+          "k"
         ]
       },
       "FileRefModel": {
@@ -3381,6 +3821,10 @@
           "includeJson": {
             "type": "boolean",
             "description": "附带 ParaTranz 兼容的译文 JSON"
+          },
+          "includeAttachments": {
+            "type": "boolean",
+            "description": "一同导出项目附件，默认 true"
           }
         },
         "required": [

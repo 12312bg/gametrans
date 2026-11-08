@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { config } from '../config';
 
@@ -36,6 +37,19 @@ export class StorageService {
     } catch {
       return false;
     }
+  }
+
+  /** 同一存储目录内移动（上传的临时文件转为正式文件，不读入内存） */
+  async move(from: string, to: string): Promise<void> {
+    const target = this.resolve(to);
+    await mkdir(dirname(target), { recursive: true });
+    await rename(this.resolve(from), target);
+  }
+
+  async sha256(key: string): Promise<string> {
+    const hash = createHash('sha256');
+    for await (const chunk of this.stream(key)) hash.update(chunk as Buffer);
+    return hash.digest('hex');
   }
 
   async remove(key: string): Promise<void> {

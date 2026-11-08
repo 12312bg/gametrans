@@ -24,9 +24,14 @@ const list = [
   cmd(405, 0, ['遠い昔……']),
   cmd(108, 0, ['コメント']),
   cmd(355, 0, ['$gameVariables.setValue(1, "テキスト");']),
+  cmd(655, 0, ["// 注释里的 'x' 不提取"]),
   cmd(356, 0, ['ShowInfo こんにちは']),
   cmd(357, 0, ['TextPlugin', 'show', 'テキスト表示', { text: 'プラグインの文字', count: '3', list: '["一","二"]', struct: '{"title":"題名","on":"true"}' }]),
   cmd(320, 0, [1, 'リード']),
+  cmd(122, 0, [3, 3, 0, 4, '"Normal"']),
+  cmd(111, 0, [12, '$gameVariables.value(3) === "Normal"']),
+  cmd(0, 1, []),
+  cmd(412, 0, []),
   cmd(0, 0, []),
 ];
 

@@ -917,3 +917,17 @@ kbd {
 .code-box {
   font-size: 12px;
 }
+
+/* ───────── 导入预览 ───────── */
+.preview-item {
+  width: 100%;
+  line-height: 1.6;
+}
+.preview-before {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.preview-lost {
+  margin-top: 4px;
+  color: #ef4444;
+}

@@ -49,6 +49,11 @@ def event_list(engine)
   list << cmd(122, 0, [1, 1, 0, 0, 2**30 - 1])
   list << cmd(122, 0, [2, 2, 0, 0, 2**30])
   list << cmd(122, 0, [3, 3, 0, 0, -70000])
+  # 条件分支（脚本）；控制变量操作数 4 在 VX Ace 中是脚本，在 XP / VX 中是角色
+  list << cmd(111, 0, [12, s('$game_variables[3] == "Normal"')])
+  list << cmd(0, 1, [])
+  list << cmd(412, 0, [])
+  list << (engine == :ace ? cmd(122, 0, [3, 3, 0, 4, s("'Normal'")]) : cmd(122, 0, [4, 4, 0, 4, 1, 0]))
   list << cmd(250, 0, [RPG::SE.new('Bell1', 80, 100)])
   list << cmd(223, 0, [Tone.new(-34, -34, 0, 170), 60, true])
   list << cmd(205, 0, [-1, RPG::MoveRoute.new])
@@ -140,6 +145,7 @@ def build(engine)
                    terms: terms, window_tone: Tone.new(0, 0, 0), version_id: 2**40, japanese: true,
                    opt_meta: { s('k') => :sym_value, :sym_key => 1.5 }, hash_default: Hash.new(0).merge(1 => 2))
   end
+  set_ivars(sys, variables: [nil, s('難易度'), s('')], switches: [nil, s('スイッチ1')])
   dump("System.#{ext}", sys)
 
   script_code = <<~'RUBY'

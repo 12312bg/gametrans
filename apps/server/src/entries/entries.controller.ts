@@ -74,6 +74,22 @@ export class EntriesController {
     return this.entries.batch(ctx, dto.action, dto.ids, dto.filter);
   }
 
+  @ApiOperation({ summary: '相同原文的脚本 / 插件字符串', description: '脚本里赋值和比较的往往是同一个值（如赋值 "Normal" 后在条件分支中判断），这些词条的译文需要保持一致。其他分类返回空数组。' })
+  @ApiOkResponse({ type: EntryModel, isArray: true })
+  @Public()
+  @Get('entries/:eid/linked')
+  async linked(@CurrentUser() user: AuthUser | undefined, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string) {
+    await this.access.require(user, pid, PERMISSIONS.VIEW);
+    return (await this.entries.linked(pid, eid)).map((e) => withContextText(e, t));
+  }
+
+  @ApiOperation({ summary: '同步译文到相同的脚本 / 插件字符串', description: '把该词条已保存的译文与状态复制到原文相同的脚本 / 插件字符串；没有权限修改的词条计入 skipped。' })
+  @Post('entries/:eid/sync')
+  async sync(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('eid') eid: string) {
+    const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
+    return this.entries.syncLinked(ctx, eid);
+  }
+
   @ApiOperation({ summary: '修改历史', description: '最近 100 条。' })
   @Public()
   @Get('entries/:eid/history')

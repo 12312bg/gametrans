@@ -42,6 +42,11 @@ export default defineMessages(
     'files.deleteConfirm': '删除文件？',
     'files.deleteDesc': '该文件的所有词条、译文与历史记录都会被删除，且无法恢复。',
     'files.deleted': '已删除',
+    'files.reextract': '重新提取',
+    'files.reextractConfirm': '用最新的提取规则重新提取全部文件？',
+    'files.reextractDesc': '已有译文按键名保留；新提取的词条（如变量名、脚本中的字符串）默认隐藏；原文件中已不存在的词条会被删除。',
+    'files.reextractStarted': '已开始重新提取，结果会显示在解析任务中',
+    'jobs.reextract': '重新提取',
   },
   {
     'upload.title': 'Upload game data',
@@ -84,5 +89,10 @@ export default defineMessages(
     'files.deleteConfirm': 'Delete this file?',
     'files.deleteDesc': 'All of its strings, translations and history will be deleted. This cannot be undone.',
     'files.deleted': 'Deleted',
+    'files.reextract': 'Re-extract',
+    'files.reextractConfirm': 'Re-extract all files with the latest rules?',
+    'files.reextractDesc': 'Existing translations are kept by key. Newly extracted strings (such as variable names and strings inside scripts) are hidden by default. Strings no longer present in the files are deleted.',
+    'files.reextractStarted': 'Re-extraction started. The result will appear under parse jobs.',
+    'jobs.reextract': 'Re-extract',
   },
 );

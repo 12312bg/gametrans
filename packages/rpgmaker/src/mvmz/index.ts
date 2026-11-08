@@ -83,7 +83,7 @@ export function parseMvMzJson(bytes: Uint8Array, opts: ParseOptions): ParsedDocu
     if (nonBlank(v)) slots.push({ key, original: v, context, category, danger, set: (nv) => (obj[field] = nv) });
   };
   const events = (list: unknown, keyPrefix: string, label: ContextPart[]) => {
-    if (Array.isArray(list)) walkEventList(list as JsonCommand[], jsonAdapter, { keyPrefix, label, xpStyle: false }, walk);
+    if (Array.isArray(list)) walkEventList(list as JsonCommand[], jsonAdapter, { keyPrefix, label, xpStyle: false, scriptLang: 'js', scriptOperand: true }, walk);
   };
 
   if (kind === 'map' && data && typeof data === 'object') {
@@ -140,11 +140,15 @@ function walkSystemJson(sys: Json, slots: Slot[]): void {
   const sysPart = c.of('ctx.system');
   const push = (holder: Record<string | number, unknown>, field: string | number, key: string, ...parts: ContextPart[]) => {
     const v = holder[field];
-    if (nonBlank(v)) slots.push({ key, original: v, context: [sysPart, ...parts], category: 'system', danger: false, set: (nv) => (holder[field] = nv) });
+    const variable = key.startsWith('variables/') || key.startsWith('switches/');
+    if (nonBlank(v)) {
+      slots.push({ key, original: v, context: [sysPart, ...parts], category: variable ? 'variable' : 'system', danger: variable, set: (nv) => (holder[field] = nv) });
+    }
   };
   push(sys, 'gameTitle', 'gameTitle', c.of('ctx.sys.gameTitle'));
   push(sys, 'currencyUnit', 'currencyUnit', c.of('ctx.sys.currencyUnit'));
-  for (const name of SYSTEM_ARRAYS) {
+  // 变量 / 开关名称通常只在编辑器中使用，但有些插件会显示，因此提取并默认隐藏
+  for (const name of [...SYSTEM_ARRAYS, 'variables', 'switches']) {
     const arr = sys[name];
     if (Array.isArray(arr)) arr.forEach((_, i) => push(arr as unknown as Record<number, unknown>, i, `${name}/${i}`, c.of(`ctx.sys.${name}`, { i })));
   }

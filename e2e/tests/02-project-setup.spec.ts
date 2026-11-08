@@ -67,7 +67,7 @@ test('概览页：统计、进度与隐藏提示', async ({ page }) => {
   await asOwner(page);
   await page.goto(`/projects/${pid}`);
   await expect(page.locator('.ant-statistic').filter({ hasText: '词条总数' })).toContainText('32');
-  await expect(page.getByText('另有 11 条已隐藏词条', { exact: false })).toBeVisible();
+  await expect(page.getByText('另有 15 条已隐藏词条', { exact: false })).toBeVisible();
   await expect(page.getByText('欢迎加入翻译！')).toBeVisible();
   await expect(page.locator('.category-bar').filter({ hasText: '对话' })).toContainText('5');
   await expect(page.locator('.activity-item').first()).toContainText('上传文件');

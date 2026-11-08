@@ -17,6 +17,8 @@ export interface ParsePayload {
   uploads: ParseUpload[];
   /** 替换指定文件（更新原文） */
   replaceFileId?: string;
+  /** 用当前的提取规则重新解析项目中已保存的原文件 */
+  reextract?: boolean;
 }
 
 export interface ExportPayload {

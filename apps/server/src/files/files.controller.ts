@@ -85,6 +85,17 @@ export class FilesController {
     return this.jobs.enqueue(pid, 'PARSE', { uploads: [{ tmpKey: tmpKeyOf(f), name: fixName(f.originalname) }], replaceFileId: fid }, user.id);
   }
 
+  @ApiOperation({
+    summary: '重新提取文本',
+    description: '用当前的提取规则重新解析项目中已上传的原文件。已有译文按键名保留；新提取的词条（如变量名、脚本字符串）默认隐藏；原文件中已不存在的词条会被删除。返回解析任务。',
+  })
+  @ApiCreatedResponse({ type: JobModel })
+  @Post('reextract')
+  async reextract(@CurrentUser() user: AuthUser, @Param('pid') pid: string) {
+    await this.access.require(user, pid, PERMISSIONS.MANAGE_FILES);
+    return this.jobs.enqueue(pid, 'PARSE', { uploads: [], reextract: true }, user.id);
+  }
+
   @ApiOperation({ summary: '删除文件', description: '同时删除其词条、译文与历史。' })
   @Delete(':fid')
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string) {

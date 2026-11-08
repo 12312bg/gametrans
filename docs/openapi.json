@@ -1315,6 +1315,38 @@
         ]
       }
     },
+    "/api/projects/{pid}/files/reextract": {
+      "post": {
+        "operationId": "FilesController_reextract",
+        "summary": "重新提取文本",
+        "description": "用当前的提取规则重新解析项目中已上传的原文件。已有译文按键名保留；新提取的词条（如变量名、脚本字符串）默认隐藏；原文件中已不存在的词条会被删除。返回解析任务。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
     "/api/projects/{pid}/files/{fid}": {
       "delete": {
         "operationId": "FilesController_remove",
@@ -1715,6 +1747,82 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/linked": {
+      "get": {
+        "operationId": "EntriesController_linked",
+        "summary": "相同原文的脚本 / 插件字符串",
+        "description": "脚本里赋值和比较的往往是同一个值（如赋值 \"Normal\" 后在条件分支中判断），这些词条的译文需要保持一致。其他分类返回空数组。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EntryModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/sync": {
+      "post": {
+        "operationId": "EntriesController_sync",
+        "summary": "同步译文到相同的脚本 / 插件字符串",
+        "description": "把该词条已保存的译文与状态复制到原文相同的脚本 / 插件字符串；没有权限修改的词条计入 skipped。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""

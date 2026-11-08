@@ -1,4 +1,4 @@
-import { DeleteOutlined, DownloadOutlined, SwapOutlined, TranslationOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, ReloadOutlined, SwapOutlined, TranslationOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Card, Empty, Input, Popconfirm, Space, Table, Tag, Tooltip } from 'antd';
 import { ENGINE_EXTENSIONS, PERMISSIONS, hasMessage } from '@gametrans/shared';
@@ -62,6 +62,16 @@ export default function FilesPage() {
     }
   };
 
+  const reextract = async () => {
+    try {
+      await api(`/projects/${pid}/files/reextract`, { method: 'POST' });
+      message.success(t('files.reextractStarted'));
+      refreshJobs();
+    } catch (e) {
+      message.error(errorMessage(e));
+    }
+  };
+
   const remove = async (f: FileItem) => {
     try {
       await api(`/projects/${pid}/files/${f.id}`, { method: 'DELETE' });
@@ -83,7 +93,18 @@ export default function FilesPage() {
       <Card
         variant="borderless"
         title={t('files.title', { count: files.data?.length ?? 0 })}
-        extra={<Input.Search allowClear placeholder={t('files.filter')} onChange={(e) => setFilter(e.target.value)} style={{ width: 220 }} />}
+        extra={
+          <Space wrap>
+            <Input.Search allowClear placeholder={t('files.filter')} onChange={(e) => setFilter(e.target.value)} style={{ width: 220 }} />
+            {canManage && !!files.data?.length && (
+              <Popconfirm title={t('files.reextractConfirm')} description={<div style={{ maxWidth: 320 }}>{t('files.reextractDesc')}</div>} onConfirm={reextract}>
+                <Button icon={<ReloadOutlined />} disabled={running}>
+                  {t('files.reextract')}
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        }
       >
         <Table<FileItem>
           rowKey="id"

@@ -180,7 +180,7 @@ export interface Job<R = unknown> {
   progress: number;
   result: R | null;
   error: string | null;
-  payload?: { stages?: Stage[]; fileIds?: string[]; includeJson?: boolean };
+  payload?: { stages?: Stage[]; fileIds?: string[]; includeJson?: boolean; reextract?: boolean };
   createdAt: string;
   startedAt?: string | null;
   finishedAt: string | null;

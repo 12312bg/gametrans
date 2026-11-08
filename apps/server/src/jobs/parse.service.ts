@@ -26,6 +26,9 @@ export interface ParseResult {
   errors: (Issue & { name: string })[];
 }
 
+/** 待导入的文件：路径与按需读取内容的函数 */
+type Source = readonly [string, () => Promise<Uint8Array>];
+
 const formatOf = (path: string) => (/\.json$/i.test(path) ? 'mvmz-json' : /\.js$/i.test(path) ? 'mvmz-plugins' : 'rgss-marshal');
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
@@ -44,11 +47,10 @@ export class ParseService {
     const result: ParseResult = { files: [], skipped: [], errors: [] };
 
     try {
-      const candidates = await this.collect(project, engine, payload, result);
-      const list = [...candidates.entries()].sort(([a], [b]) => a.localeCompare(b));
-      for (const [i, [path, data]] of list.entries()) {
+      const sources = payload.reextract ? await this.storedFiles(project.id) : await this.uploadedFiles(project, engine, payload, result);
+      for (const [i, [path, load]] of sources.entries()) {
         try {
-          const r = await this.importFile(project, path, data, job.createdById);
+          const r = await this.importFile(project, path, await load(), job.createdById, !!payload.reextract);
           if (r) result.files.push(r);
           else result.skipped.push({ name: path, code: 'NO_TEXT' });
         } catch (e) {
@@ -58,7 +60,7 @@ export class ParseService {
               : { name: path, code: 'FAILED', params: { detail: (e as Error).message } },
           );
         }
-        await progress(Math.round(((i + 1) / list.length) * 100));
+        await progress(Math.round(((i + 1) / sources.length) * 100));
       }
     } finally {
       for (const up of payload.uploads) await this.storage.remove(up.tmpKey);
@@ -67,10 +69,25 @@ export class ParseService {
     const created = result.files.filter((f) => f.status === 'created').length;
     const updated = result.files.filter((f) => f.status === 'updated').length;
     if (created || updated) {
-      await this.activity.log(project.id, job.createdById, payload.replaceFileId ? 'file.update' : 'file.upload', { created, updated });
+      if (payload.reextract) {
+        const sum = (k: 'added' | 'removed') => result.files.reduce((n, f) => n + f[k], 0);
+        await this.activity.log(project.id, job.createdById, 'file.reextract', { files: result.files.length, added: sum('added'), removed: sum('removed') });
+      } else {
+        await this.activity.log(project.id, job.createdById, payload.replaceFileId ? 'file.update' : 'file.upload', { created, updated });
+      }
       await this.prisma.project.update({ where: { id: project.id }, data: { updatedAt: new Date() } });
     }
     return result;
+  }
+
+  private async storedFiles(projectId: string): Promise<Source[]> {
+    const files = await this.prisma.file.findMany({ where: { projectId }, orderBy: { path: 'asc' }, select: { path: true, storageKey: true } });
+    return files.map((f) => [f.path, () => this.storage.read(f.storageKey)]);
+  }
+
+  private async uploadedFiles(project: Project, engine: Engine, payload: ParsePayload, result: ParseResult): Promise<Source[]> {
+    const candidates = await this.collect(project, engine, payload, result);
+    return [...candidates.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([path, data]) => [path, async () => data]);
   }
 
   /** 收集待导入的文件：zip 流式解压，只取该引擎的数据文件 */
@@ -100,13 +117,22 @@ export class ParseService {
     return candidates;
   }
 
-  /** 保存原文件并合并词条；没有文本的新文件返回 null */
-  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null): Promise<FileImportResult | null> {
+  /**
+   * 保存原文件并合并词条；没有文本的新文件返回 null。
+   * 文件内容未变时跳过，除非 reextract（提取规则更新后重新合并）。
+   */
+  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false): Promise<FileImportResult | null> {
     const { kind, entries, warnings } = extractEntries(path, data, project.engine as Engine);
     const existing = await this.prisma.file.findUnique({ where: { projectId_path: { projectId: project.id, path } } });
     if (!existing && !entries.length) return null;
     const sha256 = createHash('sha256').update(data).digest('hex');
-    if (existing?.sha256 === sha256) return { path, status: 'unchanged', total: entries.length, added: 0, changed: 0, removed: 0 };
+    if (existing?.sha256 === sha256) {
+      if (!reextract) return { path, status: 'unchanged', total: entries.length, added: 0, changed: 0, removed: 0 };
+      await this.prisma.file.update({ where: { id: existing.id }, data: { kind, warnings: json(warnings) } });
+      const stats = await this.mergeEntries(project.id, existing.id, entries, userId);
+      const touched = stats.added + stats.changed + stats.removed > 0;
+      return { path, status: touched ? 'updated' : 'unchanged', total: entries.length, ...stats };
+    }
 
     const storageKey = `projects/${project.id}/files/${sha256}`;
     await this.storage.put(storageKey, data);

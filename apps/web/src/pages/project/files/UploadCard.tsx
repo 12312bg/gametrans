@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, Progress, Space, Typography, Upload } from 'a
 import { ENGINE_EXTENSIONS, isRgssEngine, normalizeGamePath } from '@gametrans/shared';
 import { useRef, useState } from 'react';
 import { upload } from '../../../api/client';
+import type { Job } from '../../../api/types';
 import { useProject } from '../../../api/project';
 import { useT } from '../../../i18n';
 import { useAuth } from '../../../providers/AuthProvider';
@@ -13,7 +14,14 @@ const SHOWN = 50;
 const relPath = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
 const isZip = (f: File) => f.name.toLowerCase().endsWith('.zip');
 
-export function UploadCard({ onUploaded }: { onUploaded: () => void }) {
+interface Props {
+  /** 项目中已有的数据文件路径；上传中包含它们时先预览变更 */
+  existingPaths: Set<string>;
+  onUploaded: () => void;
+  onPreview: (jobId: string) => void;
+}
+
+export function UploadCard({ existingPaths, onUploaded, onPreview }: Props) {
   const t = useT();
   const { project } = useProject();
   const { site } = useAuth();
@@ -76,12 +84,17 @@ export function UploadCard({ onUploaded }: { onUploaded: () => void }) {
     const form = new FormData();
     for (const p of pending) form.append('files', p.file, p.file.name);
     form.append('paths', JSON.stringify(pending.map((p) => p.path)));
+    const preview = pending.some((p) => existingPaths.has(p.path));
     setUploadPct(0);
     try {
-      await upload(`/projects/${project.id}/files`, form, setUploadPct);
-      message.success(t('upload.done'));
+      const job = await upload<Job>(`/projects/${project.id}/files${preview ? '?preview=true' : ''}`, form, setUploadPct);
       setPending([]);
-      onUploaded();
+      if (preview) {
+        onPreview(job.id);
+      } else {
+        message.success(t('upload.done'));
+        onUploaded();
+      }
     } catch (e) {
       message.error(errorMessage(e));
     } finally {

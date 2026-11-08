@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { PERMISSIONS } from '@gametrans/shared';
-import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AccessService } from '../common/access.service';
 import { JobModel } from '../common/api.models';
@@ -11,6 +11,9 @@ import { StorageService } from '../common/storage.service';
 import { JobsService } from '../jobs/jobs.service';
 import { FilesService } from './files.service';
 import { UploadInterceptor, fixName, parsePaths, tmpKeyOf } from './upload';
+
+const PREVIEW_QUERY = { name: 'preview', required: false, enum: ['true', 'false'], description: '为 true 时只生成变更预览，确认后调用 POST /jobs/{jid}/apply 导入' } as const;
+const isPreview = (v?: string) => v === 'true' || v === '1';
 
 const FILES_BODY = {
   schema: {
@@ -58,31 +61,45 @@ export class FilesController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody(FILES_BODY)
+  @ApiQuery(PREVIEW_QUERY)
   @ApiCreatedResponse({ type: JobModel })
   @Post()
   @UseInterceptors(UploadInterceptor())
-  async upload(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @UploadedFiles() files: Express.Multer.File[], @Body('paths') rawPaths?: string) {
+  async upload(
+    @CurrentUser() user: AuthUser,
+    @Param('pid') pid: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('paths') rawPaths?: string,
+    @Query('preview') preview?: string,
+  ) {
     await this.guardUpload(user, pid, files, async () => {
       if (!files?.length) throw fail('NO_FILES');
     });
     const paths = parsePaths(rawPaths);
     const uploads = files.map((f, i) => ({ tmpKey: tmpKeyOf(f), name: paths[i] ?? fixName(f.originalname) }));
-    return this.jobs.enqueue(pid, 'PARSE', { uploads }, user.id);
+    return this.jobs.enqueue(pid, 'PARSE', { uploads, preview: isPreview(preview) }, user.id);
   }
 
   @ApiOperation({ summary: '上传新版本（更新原文）', description: '已有译文按键名保留，原文变化的词条标记为「有疑问」。' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['files'], properties: { files: { type: 'string', format: 'binary' } } } })
+  @ApiQuery(PREVIEW_QUERY)
   @ApiCreatedResponse({ type: JobModel })
   @Post(':fid/replace')
   @UseInterceptors(UploadInterceptor())
-  async replace(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string, @UploadedFiles() files: Express.Multer.File[]) {
+  async replace(
+    @CurrentUser() user: AuthUser,
+    @Param('pid') pid: string,
+    @Param('fid') fid: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Query('preview') preview?: string,
+  ) {
     await this.guardUpload(user, pid, files, async () => {
       if (files?.length !== 1) throw fail('SINGLE_FILE_REQUIRED');
       await this.files.get(pid, fid);
     });
     const [f] = files;
-    return this.jobs.enqueue(pid, 'PARSE', { uploads: [{ tmpKey: tmpKeyOf(f), name: fixName(f.originalname) }], replaceFileId: fid }, user.id);
+    return this.jobs.enqueue(pid, 'PARSE', { uploads: [{ tmpKey: tmpKeyOf(f), name: fixName(f.originalname) }], replaceFileId: fid, preview: isPreview(preview) }, user.id);
   }
 
   @ApiOperation({

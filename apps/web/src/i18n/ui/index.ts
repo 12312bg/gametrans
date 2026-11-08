@@ -1,4 +1,5 @@
 export { default as admin } from './admin';
+export { default as attachments } from './attachments';
 export { default as auth } from './auth';
 export { default as common } from './common';
 export { default as editor } from './editor';

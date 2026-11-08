@@ -11,7 +11,9 @@ import { ProgressBar } from '../../../components/ProgressBar';
 import { useT } from '../../../i18n';
 import { issueText } from '../../../i18n/format';
 import { errorMessage, formatSize, fromNow } from '../../../utils';
+import { AttachmentsCard } from './AttachmentsCard';
 import { ParseJobs } from './ParseJobs';
+import { PreviewModal } from './PreviewModal';
 import { UploadCard } from './UploadCard';
 
 const isActive = (j: Job) => j.status === 'QUEUED' || j.status === 'RUNNING';
@@ -25,6 +27,7 @@ export default function FilesPage() {
   const { message } = App.useApp();
   const canManage = has(PERMISSIONS.MANAGE_FILES);
   const [filter, setFilter] = useState('');
+  const [previewJob, setPreviewJob] = useState<string | null>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
   const replaceTarget = useRef<FileItem | null>(null);
 
@@ -54,9 +57,8 @@ export default function FilesPage() {
     const form = new FormData();
     form.append('files', f, f.name);
     try {
-      await upload(`/projects/${pid}/files/${target.id}/replace`, form);
-      message.success(t('upload.replaced', { path: target.path }));
-      refreshJobs();
+      const job = await upload<Job>(`/projects/${pid}/files/${target.id}/replace?preview=true`, form);
+      setPreviewJob(job.id);
     } catch (e) {
       message.error(errorMessage(e));
     }
@@ -84,11 +86,23 @@ export default function FilesPage() {
 
   const data = useMemo(() => (files.data ?? []).filter((f) => !filter || f.path.toLowerCase().includes(filter.toLowerCase())), [files.data, filter]);
   const openEditor = (f: FileItem) => nav(`/projects/${pid}/editor?file=${f.id}`);
+  const existingPaths = useMemo(() => new Set((files.data ?? []).map((f) => f.path)), [files.data]);
+  const parseJobs = (jobs.data ?? []).filter((j) => !j.payload?.preview);
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {canManage && <UploadCard onUploaded={refreshJobs} />}
-      {canManage && !!jobs.data?.length && <ParseJobs jobs={jobs.data} />}
+      {canManage && <UploadCard existingPaths={existingPaths} onUploaded={refreshJobs} onPreview={setPreviewJob} />}
+      {canManage && parseJobs.length > 0 && <ParseJobs jobs={parseJobs} />}
+      {previewJob && (
+        <PreviewModal
+          pid={pid}
+          jobId={previewJob}
+          onClose={() => {
+            setPreviewJob(null);
+            refreshJobs();
+          }}
+        />
+      )}
 
       <Card
         variant="borderless"
@@ -187,6 +201,7 @@ export default function FilesPage() {
           }}
         />
       </Card>
+      <AttachmentsCard canManage={canManage} dataPaths={existingPaths} />
     </Space>
   );
 }

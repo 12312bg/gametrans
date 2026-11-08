@@ -60,6 +60,7 @@ export function buildOpenApi(app: INestApplication): OpenAPIObject {
     .addTag('文件与任务', '上传数据文件、更新原文、查询解析 / 导出任务')
     .addTag('词条', '查询、翻译、审核、批量操作、历史与翻译记忆')
     .addTag('术语表', '项目术语的维护与导入')
+    .addTag('附件', '与数据文件一起导出的其他文件，如 www/img/Quests.txt')
     .addTag('导出', '生成并下载可覆盖到游戏目录的导出包')
     .addTag('成员与邀请', '成员角色、加入申请与邀请')
     .addTag('用户', '个人资料与用户搜索')

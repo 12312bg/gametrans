@@ -5,7 +5,7 @@ import { Job as BullJob } from 'bullmq';
 import { ActivityService } from '../common/activity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExportService } from './export.service';
-import { JOB_QUEUE, JobError } from './jobs.service';
+import { JOB_QUEUE, JobError, JobsService } from './jobs.service';
 import { ParseService } from './parse.service';
 
 /** 单实例部署：默认串行处理，避免同一项目的解析任务互相干扰 */
@@ -18,6 +18,7 @@ export class JobsProcessor extends WorkerHost implements OnModuleInit {
     private readonly parse: ParseService,
     private readonly exporter: ExportService,
     private readonly activity: ActivityService,
+    private readonly jobs: JobsService,
   ) {
     super();
   }
@@ -26,6 +27,9 @@ export class JobsProcessor extends WorkerHost implements OnModuleInit {
   async onModuleInit() {
     const res = await this.prisma.job.updateMany({ where: { status: 'RUNNING' }, data: { status: 'FAILED', error: 'JOB_INTERRUPTED', finishedAt: new Date() } });
     if (res.count) this.logger.warn(`Marked ${res.count} interrupted jobs as failed`);
+    const sweep = () => this.jobs.cleanupPreviews().catch((e) => this.logger.error('Preview cleanup failed', (e as Error).stack));
+    void sweep();
+    setInterval(sweep, 60 * 60 * 1000).unref();
   }
 
   async process(bj: BullJob<{ jobId: string }>): Promise<void> {

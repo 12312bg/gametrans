@@ -159,8 +159,28 @@ export interface Invitation {
 /** 旧版任务结果只有中文 reason / message */
 export type ResultIssue = Partial<Issue> & { name: string; reason?: string; message?: string };
 
+export interface FileResult {
+  path: string;
+  status: 'created' | 'updated' | 'unchanged';
+  total: number;
+  added: number;
+  changed: number;
+  removed: number;
+}
+
+/** 预览任务中每个文件的变更明细（每类最多 100 条） */
+export interface FilePreview extends FileResult {
+  removedTranslated: number;
+  details: {
+    added: { key: string; original: string; category: string }[];
+    changed: { key: string; before: string; after: string; translation: string; stage: Stage }[];
+    removed: { key: string; original: string; translation: string; stage: Stage }[];
+  };
+}
+
 export interface ParseResultData {
-  files: { path: string; status: 'created' | 'updated' | 'unchanged'; total: number; added: number; changed: number; removed: number }[];
+  preview?: boolean;
+  files: (FileResult | FilePreview)[];
   skipped: ResultIssue[];
   errors: ResultIssue[];
 }
@@ -170,6 +190,7 @@ export interface ExportResultData {
   size: number;
   fileCount: number;
   applied: number;
+  attachmentCount?: number;
   errors: ResultIssue[];
 }
 
@@ -180,7 +201,7 @@ export interface Job<R = unknown> {
   progress: number;
   result: R | null;
   error: string | null;
-  payload?: { stages?: Stage[]; fileIds?: string[]; includeJson?: boolean; reextract?: boolean };
+  payload?: { stages?: Stage[]; fileIds?: string[]; includeJson?: boolean; includeAttachments?: boolean; reextract?: boolean; preview?: boolean };
   createdAt: string;
   startedAt?: string | null;
   finishedAt: string | null;
@@ -216,6 +237,16 @@ export interface SiteConfig {
   allowRegistration: boolean;
   projectCreation: 'everyone' | 'superadmin';
   uploadLimitMb: number;
+}
+
+export interface Attachment {
+  id: string;
+  path: string;
+  size: number;
+  sha256: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: UserBrief | null;
 }
 
 export interface ApiToken {

@@ -159,6 +159,26 @@ export class OkModel {
   ok: boolean;
 }
 
+export class AttachmentModel {
+  id: string;
+  /** 相对游戏根目录的路径，如 www/img/Quests.txt */
+  path: string;
+  size: number;
+  sha256: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: UserBriefModel | null;
+}
+
+export class AttachmentUploadModel {
+  /** 新增的附件数 */
+  created: number;
+  /** 覆盖的同路径附件数 */
+  updated: number;
+  /** 上传后的全部附件 */
+  items: AttachmentModel[];
+}
+
 /** 分页参数 page / pageSize 的文档装饰器 */
 export const ApiPaging = () =>
   applyDecorators(

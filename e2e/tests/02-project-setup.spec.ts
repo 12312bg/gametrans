@@ -56,11 +56,15 @@ test('上传游戏目录 zip，后台解析后展示文件与进度', async ({ p
   }
   await expect(page.getByText('文件（7）')).toBeVisible();
 
-  // 再次上传内容相同的单个文件 → 未变化
+  // 再次上传已有的文件 → 先预览；内容相同时没有可导入的变化，取消后丢弃
   const items = readFileSync(join(FIX, 'mz', 'Items.json'));
   await page.locator('.ant-upload-drag input[type=file]').setInputFiles({ name: 'Items.json', mimeType: 'application/json', buffer: items });
   await btn(page, '开始上传').click();
-  await expect(page.locator('.job-result').first()).toContainText('未变化 1', { timeout: 30_000 });
+  const dialog = page.getByRole('dialog').filter({ hasText: '导入前确认变更' });
+  await expect(dialog).toContainText('与已有文件相比没有变化', { timeout: 30_000 });
+  await expect(btn(dialog, '确认导入')).toBeDisabled();
+  await btn(dialog, '取消').click();
+  await expect(toast(page, '已取消，本次上传的文件已丢弃')).toBeVisible();
 });
 
 test('概览页：统计、进度与隐藏提示', async ({ page }) => {

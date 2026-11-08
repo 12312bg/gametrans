@@ -28,7 +28,7 @@ export class ExportsController {
   @Post()
   async create(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: CreateExportDto) {
     await this.access.require(user, pid, PERMISSIONS.CREATE_EXPORT);
-    return this.jobs.enqueue(pid, 'EXPORT', { fileIds: dto.fileIds, stages: dto.stages, includeJson: !!dto.includeJson }, user.id);
+    return this.jobs.enqueue(pid, 'EXPORT', { fileIds: dto.fileIds, stages: dto.stages, includeJson: !!dto.includeJson, includeAttachments: dto.includeAttachments !== false }, user.id);
   }
 
   @ApiOperation({ summary: '导出记录' })

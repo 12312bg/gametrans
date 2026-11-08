@@ -10,6 +10,7 @@ import { AllExceptionsFilter } from './common/exception.filter';
 import { config } from './config';
 import { EntriesModule } from './entries/entries.module';
 import { ExportsModule } from './exports/exports.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 import { FilesModule } from './files/files.module';
 import { JobsModule } from './jobs/jobs.module';
 import { MembersModule } from './members/members.module';
@@ -42,6 +43,7 @@ function redisConnection(url: string) {
     ProjectsModule,
     MembersModule,
     FilesModule,
+    AttachmentsModule,
     JobsModule,
     EntriesModule,
     TermsModule,

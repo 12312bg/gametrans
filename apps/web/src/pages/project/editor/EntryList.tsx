@@ -6,6 +6,8 @@ import { StageDot } from '../../../components/Tags';
 import { useT } from '../../../i18n';
 import { CodesOnly } from './highlight';
 
+export const PAGE_SIZES = [20, 50, 100, 200];
+
 interface Props {
   items: Entry[];
   total: number | undefined;
@@ -14,7 +16,7 @@ interface Props {
   emptyText: string;
   page: number;
   pageSize: number;
-  onPage: (page: number) => void;
+  onPage: (page: number, pageSize: number) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   drafts: Record<string, string>;
@@ -85,7 +87,16 @@ export function EntryList(p: Props) {
         )}
       </div>
       <div className="list-foot">
-        <Pagination size="small" simple current={p.page} pageSize={p.pageSize} total={p.total ?? 0} onChange={p.onPage} />
+        <Pagination
+          size="small"
+          simple
+          current={p.page}
+          pageSize={p.pageSize}
+          total={p.total ?? 0}
+          showSizeChanger
+          pageSizeOptions={PAGE_SIZES}
+          onChange={p.onPage}
+        />
       </div>
     </div>
   );

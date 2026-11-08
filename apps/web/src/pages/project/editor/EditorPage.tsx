@@ -9,11 +9,21 @@ import type { Entry, FileItem, HistoryItem, Paged, Suggestion, Term } from '../.
 import { useT } from '../../../i18n';
 import { errorMessage } from '../../../utils';
 import { BatchBar, EditorToolbar, EntryFilter } from './EditorToolbar';
-import { EntryList } from './EntryList';
+import { EntryList, PAGE_SIZES } from './EntryList';
 import { EntryPanel, EntryPanelHandle } from './EntryPanel';
 import { useShortcuts } from './useShortcuts';
 
-const PAGE_SIZE = 50;
+const SIZE_KEY = 'gt-editor-page-size';
+
+function savedPageSize(): number {
+  try {
+    const n = Number(localStorage.getItem(SIZE_KEY));
+    if (PAGE_SIZES.includes(n)) return n;
+  } catch {
+    /* 隐私模式下不可用 */
+  }
+  return 50;
+}
 
 export default function EditorPage() {
   const t = useT();
@@ -31,6 +41,8 @@ export default function EditorPage() {
     field: params.get('field') ?? 'all',
   };
   const page = Number(params.get('page') ?? 1);
+  const sizeParam = Number(params.get('size'));
+  const pageSize = PAGE_SIZES.includes(sizeParam) ? sizeParam : savedPageSize();
   const selectedId = params.get('entry');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [sideTab, setSideTab] = useState('tm');
@@ -59,10 +71,10 @@ export default function EditorPage() {
     [setParams],
   );
 
-  const listKey = ['entries', pid, filter, page] as const;
+  const listKey = ['entries', pid, filter, page, pageSize] as const;
   const list = useQuery({
     queryKey: listKey,
-    queryFn: () => api<Paged<Entry>>(`/projects/${pid}/entries${qs({ ...filter, field: filter.q ? filter.field : undefined, page, pageSize: PAGE_SIZE })}`),
+    queryFn: () => api<Paged<Entry>>(`/projects/${pid}/entries${qs({ ...filter, field: filter.q ? filter.field : undefined, page, pageSize })}`),
     placeholderData: keepPreviousData,
   });
   const files = useQuery({ queryKey: ['files', pid], queryFn: () => api<FileItem[]>(`/projects/${pid}/files`) });
@@ -77,8 +89,21 @@ export default function EditorPage() {
     enabled: !!selectedId && !inList && !list.isFetching,
   });
   const current = inList ?? (selectedId && single.data?.id === selectedId ? single.data : undefined);
-  const totalPages = Math.max(1, Math.ceil((list.data?.total ?? 0) / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil((list.data?.total ?? 0) / pageSize));
   const select = useCallback((id: string | undefined) => setParam({ entry: id }, false), [setParam]);
+
+  /** 翻页时选中新页第一条；改每页条数时停在包含当前词条的那一页 */
+  const changePage = (pg: number, size: number) => {
+    if (size === pageSize) return setParam({ page: String(pg), entry: null }, false);
+    try {
+      localStorage.setItem(SIZE_KEY, String(size));
+    } catch {
+      /* ignore */
+    }
+    const idx = Math.max(0, items.findIndex((e) => e.id === selectedId));
+    const newPage = Math.floor(((page - 1) * pageSize + idx) / size) + 1;
+    setParam({ page: newPage > 1 ? String(newPage) : null, size: String(size) }, false);
+  };
 
   useEffect(() => {
     if (!list.data || list.isPlaceholderData) return;
@@ -267,8 +292,8 @@ export default function EditorPage() {
           fetching={list.isFetching}
           emptyText={t(project.fileCount === 0 ? 'editor.noFiles' : 'editor.noEntries')}
           page={page}
-          pageSize={PAGE_SIZE}
-          onPage={(pg) => setParam({ page: String(pg), entry: null }, false)}
+          pageSize={pageSize}
+          onPage={changePage}
           selectedId={selectedId}
           onSelect={select}
           drafts={drafts}

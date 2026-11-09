@@ -131,6 +131,18 @@ export class EntriesService {
     return { items, total, ...p };
   }
 
+  /** 词条在筛选结果（默认排序）中的序号，不在结果中时为 null */
+  async position(projectId: string, id: string, f: EntryFilter) {
+    const e = await this.prisma.entry.findFirst({ where: { id, projectId }, select: { id: true, fileId: true, sortOrder: true, file: { select: { path: true } } } });
+    if (!e) throw fail('ENTRY_NOT_FOUND');
+    const where = this.buildWhere(projectId, { ...f, sort: undefined });
+    if (!(await this.prisma.entry.count({ where: { AND: [where, { id }] } }))) return { index: null };
+    const before = await this.prisma.entry.count({
+      where: { AND: [where, { OR: [{ file: { path: { lt: e.file.path } } }, { fileId: e.fileId, sortOrder: { lt: e.sortOrder } }] }] },
+    });
+    return { index: before };
+  }
+
   async get(projectId: string, id: string) {
     const e = await this.prisma.entry.findFirst({ where: { id, projectId }, select: ENTRY_SELECT });
     if (!e) throw fail('ENTRY_NOT_FOUND');

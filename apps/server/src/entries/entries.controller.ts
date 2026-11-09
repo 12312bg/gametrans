@@ -50,6 +50,14 @@ export class EntriesController {
     return withContextText(await this.entries.get(pid, eid), t);
   }
 
+  @ApiOperation({ summary: '词条在筛选结果中的位置', description: '查询参数同词条列表；返回按默认排序的序号 `index`（从 0 开始），不在结果中时为 null。用于跳转到包含该词条的页。' })
+  @Public()
+  @Get('entries/:eid/position')
+  async position(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string, @Param('eid') eid: string, @Query() query: EntryFilter) {
+    await this.access.require(user, pid, PERMISSIONS.VIEW);
+    return this.entries.position(pid, eid, query);
+  }
+
   @ApiOperation({ summary: '前后相邻词条', description: '同一文件中前后各 3 条，用于理解上下文。' })
   @Public()
   @Get('entries/:eid/neighbors')

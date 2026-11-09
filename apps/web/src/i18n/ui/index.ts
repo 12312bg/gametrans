@@ -12,3 +12,4 @@ export { default as overview } from './overview';
 export { default as profile } from './profile';
 export { default as settings } from './settings';
 export { default as terms } from './terms';
+export { default as tools } from './tools';

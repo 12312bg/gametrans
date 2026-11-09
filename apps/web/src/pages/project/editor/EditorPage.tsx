@@ -197,6 +197,19 @@ export default function EditorPage() {
     }
   };
 
+  /** 只看该词条所在的文件（清除搜索与分类），并停在包含它的那一页 */
+  const jumpToFile = async (e: Entry) => {
+    const next = { ...filter, fileId: e.fileId, q: '', category: '' };
+    let page = 1;
+    try {
+      const { index } = await api<{ index: number | null }>(`/projects/${pid}/entries/${e.id}/position${qs({ ...next, field: undefined })}`);
+      if (index !== null) page = Math.floor(index / pageSize) + 1;
+    } catch {
+      /* 定位失败时停在第一页，当前词条仍保持选中 */
+    }
+    setParam({ file: e.fileId, q: null, field: null, category: null, page: page > 1 ? String(page) : null, entry: e.id }, false);
+  };
+
   const rollback = async (h: HistoryItem) => {
     if (!current) return;
     try {
@@ -318,6 +331,7 @@ export default function EditorPage() {
               onSave={(o) => void save(o)}
               onRollback={rollback}
               onJump={select}
+              onFile={() => void jumpToFile(current)}
               sideTab={sideTab}
               onSideTab={setSideTab}
             />

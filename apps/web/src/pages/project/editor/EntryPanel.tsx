@@ -41,6 +41,8 @@ interface Props {
   onSave: (opts?: { stage?: Stage; next?: boolean }) => void;
   onRollback: (h: HistoryItem) => void;
   onJump: (id: string) => void;
+  /** 点击文件名：只看该文件的词条 */
+  onFile: () => void;
   sideTab: string;
   onSideTab: (k: string) => void;
 }
@@ -169,8 +171,13 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
         <Space size={6} wrap>
           <StageTag stage={stage} />
           <Tag bordered={false}>{t(`category.${entry.category}`)}</Tag>
+          <Tooltip title={t('entry.showFile')}>
+            <Typography.Link className="small entry-file" onClick={props.onFile}>
+              {entry.file.path}
+            </Typography.Link>
+          </Tooltip>
           <Typography.Text type="secondary" className="small" copyable={{ text: entry.key, tooltips: [t('entry.copyKey'), t('entry.copied')] }}>
-            {entry.file.path} · {entry.key}
+            {entry.key}
           </Typography.Text>
         </Space>
         <div className="entry-context">{contextText(entry, t)}</div>

@@ -27,6 +27,11 @@ export function AppLayout() {
               <Link to="/" className={loc.pathname === '/' ? 'active' : ''}>
                 {t('nav.explore')}
               </Link>
+              {user && (
+                <Link to="/tools" className={loc.pathname.startsWith('/tools') ? 'active' : ''}>
+                  {t('nav.tools')}
+                </Link>
+              )}
             </nav>
           </Space>
           <Space size={10} align="center">

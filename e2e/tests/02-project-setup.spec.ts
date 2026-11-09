@@ -165,7 +165,9 @@ test('调整成员角色：翻译员 → 访客后不能翻译', async ({ browse
 
   await row.locator('.ant-select').click();
   await pickOption(page, '翻译员');
-  await expect(toast(page, '角色已更新')).toBeVisible();
+  // 上一条提示可能还没消失
+  await expect(toast(page, '角色已更新').last()).toBeVisible();
+  await expect(row.locator('.ant-select-selection-item')).toHaveText('翻译员');
   await ap.reload();
   await expect(ap.locator('.translation-input')).toBeEnabled();
   await ap.context().close();

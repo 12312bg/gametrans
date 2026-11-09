@@ -16,6 +16,7 @@ import MembersPage from './pages/project/MembersPage';
 import OverviewPage from './pages/project/OverviewPage';
 import SettingsPage from './pages/project/SettingsPage';
 import TermsPage from './pages/project/TermsPage';
+import ToolsPage from './pages/tools/ToolsPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="." replace />} />
         </Route>
+        <Route path="tools" element={<RequireAuth><ToolsPage /></RequireAuth>} />
         <Route path="me" element={<RequireAuth><ProfilePage /></RequireAuth>} />
         <Route path="admin" element={<RequireAuth admin><AdminPage /></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />

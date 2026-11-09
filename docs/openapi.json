@@ -1950,6 +1950,46 @@
         ]
       }
     },
+    "/api/projects/{pid}/entries/{eid}/position": {
+      "get": {
+        "operationId": "EntriesController_position",
+        "summary": "词条在筛选结果中的位置",
+        "description": "查询参数同词条列表；返回按默认排序的序号 `index`（从 0 开始），不在结果中时为 null。用于跳转到包含该词条的页。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
     "/api/projects/{pid}/entries/{eid}/neighbors": {
       "get": {
         "operationId": "EntriesController_neighbors",

@@ -99,7 +99,11 @@ export function parseMvMzJson(bytes: Uint8Array, opts: ParseOptions): ParsedDocu
     }
   } else if (kind === 'common_events' && Array.isArray(data)) {
     for (const ce of data as (Json | null)[]) {
-      if (ce) events(ce.list, `${String(ce.id)}/list`, [c.commonEvent(ce.id as number, String(ce.name ?? ''))]);
+      if (!ce) continue;
+      const cePart = c.commonEvent(ce.id as number, String(ce.name ?? ''));
+      // 公共事件名通常只在编辑器中使用，但公共事件菜单类插件会把它显示为菜单项
+      emitField(ce, 'name', `${String(ce.id)}/name`, [cePart, c.field('name')], 'eventName', true);
+      events(ce.list, `${String(ce.id)}/list`, [cePart]);
     }
   } else if (kind === 'troops' && Array.isArray(data)) {
     for (const tr of data as (Json | null)[]) {

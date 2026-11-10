@@ -110,15 +110,15 @@ test('翻译页切换每页条数：保持当前词条，刷新后仍生效', as
   await useAs(page, u);
   await openEditor(page, p.id);
   const items = page.locator('.entry-item');
-  await expect(page.locator('.list-head')).toContainText('共 32 条');
-  await expect(items).toHaveCount(32);
+  await expect(page.locator('.list-head')).toContainText('共 33 条');
+  await expect(items).toHaveCount(33);
 
   await items.filter({ hasText: '#25' }).click();
   const original = await page.locator('.original-text').innerText();
   await page.locator('.list-foot .ant-pagination-options .ant-select').click();
   await pickOption(page, '20 条/页');
   // 第 25 条在每页 20 条时位于第 2 页
-  await expect(items).toHaveCount(12);
+  await expect(items).toHaveCount(13);
   await expect(activeItem(page)).toContainText('#25');
   await expect(page.locator('.original-text')).toHaveText(original);
   await expect(page).toHaveURL(/size=20/);
@@ -127,6 +127,6 @@ test('翻译页切换每页条数：保持当前词条，刷新后仍生效', as
   await openEditor(page, p.id);
   await expect(items).toHaveCount(20);
   await page.locator('.list-foot .ant-pagination-next').click();
-  await expect(items).toHaveCount(12);
+  await expect(items).toHaveCount(13);
   await expect(activeItem(page)).toContainText('#21');
 });

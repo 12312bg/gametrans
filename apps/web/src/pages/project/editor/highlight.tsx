@@ -1,5 +1,5 @@
 import { Tooltip } from 'antd';
-import { CONTROL_CODE_REGEX } from '@gametrans/shared';
+import { controlCodeSpans } from '@gametrans/shared';
 import { ReactNode } from 'react';
 import type { Term } from '../../../api/types';
 
@@ -15,10 +15,8 @@ function overlaps(ranges: Range[], s: number, e: number) {
 
 /** 找出原文中命中的术语（长术语优先，避免被短术语切碎） */
 export function findTerms(text: string, terms: Term[]): { ranges: Range[]; matched: Term[] } {
-  const ranges: Range[] = [];
-  for (const m of text.matchAll(new RegExp(CONTROL_CODE_REGEX.source, 'g'))) {
-    ranges.push({ start: m.index!, end: m.index! + m[0].length });
-  }
+  // 名字框 \n<名字> 中的名字不算控制符，可以命中术语
+  const ranges: Range[] = controlCodeSpans(text);
   const matched: Term[] = [];
   const lower = text.toLowerCase();
   const sorted = [...terms].sort((a, b) => b.term.length - a.term.length);
@@ -84,14 +82,14 @@ export function CodesOnly({ text }: { text: string }) {
   const out: ReactNode[] = [];
   let pos = 0;
   let i = 0;
-  for (const m of text.matchAll(new RegExp(CONTROL_CODE_REGEX.source, 'g'))) {
-    if (m.index! > pos) out.push(text.slice(pos, m.index));
+  for (const r of controlCodeSpans(text)) {
+    if (r.start > pos) out.push(text.slice(pos, r.start));
     out.push(
       <span key={i++} className="hl-code">
-        {m[0]}
+        {text.slice(r.start, r.end)}
       </span>,
     );
-    pos = m.index! + m[0].length;
+    pos = r.end;
   }
   if (pos < text.length) out.push(text.slice(pos));
   return <>{out}</>;

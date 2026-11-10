@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyJsonPatch, applyPreEdit, computePatch, diffJson, editableText, extractEntries, preEditTouchedEntries, prettyJson } from '../src';
+import { JsonChange, applyJsonPatch, applyPreEdit, computePatch, diffJson, editableText, extractEntries, preEditTouchedEntries, prettyJson, sameJson } from '../src';
 
 const mz = (f: string) => new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'mz', f)));
 const text = (b: Uint8Array) => Buffer.from(b).toString('utf8');
@@ -27,6 +27,14 @@ describe('JSON 字段补丁', () => {
     ]);
     expect(value).toEqual({ x: 5, y: 9 });
     expect(conflicts).toHaveLength(1);
+  });
+
+  it('比较时不计对象键顺序，但数组顺序与类型要一致', () => {
+    expect(sameJson({ a: 1, b: [{ x: 1, y: '2' }] }, { b: [{ y: '2', x: 1 }], a: 1 })).toBe(true);
+    expect(sameJson([1, 2], [2, 1])).toBe(false);
+    expect(sameJson({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    expect(sameJson({ a: '1' }, { a: 1 })).toBe(false);
+    expect(sameJson(null, {})).toBe(false);
   });
 
   it('易读格式：短值与基本类型数组保持一行', () => {
@@ -67,6 +75,27 @@ describe('数据文件预编辑', () => {
     const out = text(applyPreEdit('js/plugins.js', bytes, patch).data);
     expect(out).toBe(text(bytes).replace('"Visible":"true"', '"Visible":"false"'));
     expect(() => computePatch('js/plugins.js', bytes, '{}')).toThrow('PREEDIT_INVALID_JSON');
+  });
+
+  it('补丁经 jsonb 存储（对象键被重排）后仍能应用，并保持原文件的键顺序', () => {
+    // PostgreSQL jsonb 按「键长度、再按字节」排列对象键
+    const jsonb = (v: unknown): unknown =>
+      Array.isArray(v)
+        ? v.map(jsonb)
+        : v && typeof v === 'object'
+          ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.length - b.length || (a < b ? -1 : 1)).map(([k, x]) => [k, jsonb(x)]))
+          : v;
+    const bytes = mz('plugins.js');
+    const added = '{"name":"Added","status":true,"description":"新插件","parameters":{"Speed":"5"}}';
+    const edited = JSON.stringify([...JSON.parse(editableText('js/plugins.js', bytes)), JSON.parse(added)]);
+    const patch = jsonb(computePatch('js/plugins.js', bytes, edited)) as JsonChange[];
+    expect(patch).toHaveLength(1);
+    expect(JSON.stringify(patch)).toContain('"parameters":{},"description":""');
+
+    expect(editableText('js/plugins.js', bytes, patch)).toContain(added);
+    const { data, conflicts } = applyPreEdit('js/plugins.js', bytes, patch);
+    expect(conflicts).toBe(0);
+    expect(text(data)).toBe(text(bytes).replace('"parameters":{}}\n]', `"parameters":{}},\n${added}\n]`));
   });
 
   it('无效 JSON 与不支持的格式', () => {

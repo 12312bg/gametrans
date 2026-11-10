@@ -183,7 +183,7 @@ model File {
   /// 解析提示 [{ code, params }]
   warnings   Json      @default("[]")
   /// 预编辑：相对原文件的 JSON 字段变更 [{ path, before?, after? }]，导出时先应用再写入译文
-  editPatch  Json?
+  editPatch  Json? @db.Json
   editedAt   DateTime?
   editedById String?
   createdAt  DateTime  @default(now())

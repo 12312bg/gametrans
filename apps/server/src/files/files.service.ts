@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { JsonChange, UnsupportedFileError, applyPreEdit, computePatch, editableText, isPreEditable, preEditTouchedEntries } from '@gametrans/rpgmaker';
+import { JsonChange, UnsupportedFileError, applyPreEdit, computePatch, editableText, editableView, isPreEditable, preEditTouchedEntries } from '@gametrans/rpgmaker';
 import type { Engine } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { ActivityService } from '../common/activity.service';
@@ -40,15 +40,17 @@ export class FilesService {
   /** 预编辑：编辑器中显示的原文件与预编辑后的内容（易读格式） */
   async getEdit(pid: string, fid: string) {
     const file = await this.get(pid, fid);
-    if (!isPreEditable(file.path)) return { editable: false, original: null, edited: null, changes: 0, editedAt: null, editedBy: null };
+    if (!isPreEditable(file.path)) return { editable: false, original: null, edited: null, changes: 0, conflicts: 0, editedAt: null, editedBy: null };
     const bytes = await this.storage.read(file.storageKey);
     const patch = (file.editPatch as unknown as JsonChange[] | null) ?? [];
     const editedBy = file.editedById ? await this.prisma.user.findUnique({ where: { id: file.editedById }, select: { id: true, username: true, displayName: true } }) : null;
+    const view = patch.length ? editableView(file.path, bytes, patch) : null;
     return {
       editable: true,
       original: editableText(file.path, bytes),
-      edited: patch.length ? editableText(file.path, bytes, patch) : null,
+      edited: view?.text ?? null,
       changes: patch.length,
+      conflicts: view?.conflicts ?? 0,
       editedAt: file.editedAt,
       editedBy,
     };

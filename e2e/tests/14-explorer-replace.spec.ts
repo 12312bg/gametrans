@@ -1,6 +1,7 @@
 import { unzipSync } from 'fflate';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TestUser, addMember, btn, createUser, expect, mzZip, openEditor, seedProject, test, toast, useAs } from './helpers';
+import { FIX, TestUser, addMember, btn, createUser, expect, mzZip, openEditor, seedProject, test, toast, useAs } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -150,6 +151,46 @@ test('数据文件预编辑：只能改未提取的内容，导出时先应用�
   const map = JSON.parse(new TextDecoder().decode(zip['www/data/Map001.json']));
   expect(map.battleback1Name).toBe('Grass');
   expect(JSON.stringify(map)).toContain('再见');
+});
+
+test('plugins.js 预编辑新增插件：保存后对比可见改动，键顺序不变，导出生效', async ({ page }) => {
+  const files: { id: string; path: string }[] = await owner.api.ok('GET', `/projects/${pid}/files`);
+  const plugins = files.find((f) => f.path === 'www/js/plugins.js')!;
+  const editUrl = `/projects/${pid}/files/${plugins.id}/edit`;
+  const { original } = await owner.api.ok('GET', editUrl);
+  // 整个 $plugins 数组被替换，补丁中的旧值是对象数组：存储时不能重排键，否则会被当成冲突
+  const added = { name: 'AddedPlugin', status: true, description: '新插件', parameters: { Enabled: 'true', Speed: '5' } };
+  const saved = await owner.api.ok('PUT', editUrl, { content: JSON.stringify([...JSON.parse(original), added], null, 2) });
+  expect(saved.conflicts).toBe(0);
+  expect(saved.edited).toContain(JSON.stringify(added));
+  expect((await owner.api.ok('GET', editUrl)).edited).toContain(JSON.stringify(added));
+
+  await useAs(page, owner);
+  await page.goto(`/projects/${pid}/attachments`);
+  await page.locator('.tool-tree').getByText('js').click();
+  await tile(page, 'www/js/plugins.js').click();
+  const viewer = page.locator('.file-viewer');
+  await viewer.getByRole('tab', { name: '对比' }).click();
+  await expect(viewer.locator('.diff-stats')).toContainText('1 处改动');
+  await expect(viewer.locator('.viewer-conflicts')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  const { zip } = await exportZip();
+  const out = new TextDecoder().decode(zip['www/js/plugins.js']);
+  expect(out).toContain(`,\n${JSON.stringify(added)}\n]`);
+
+  // 上传新版本后原值对不上：预编辑不生效，查看器给出提示
+  const next = readFileSync(join(FIX, 'mz', 'plugins.js'), 'utf8').replace('"Visible":"true"', '"Visible":"false"');
+  const r = await owner.api.ctx.post(`/api/projects/${pid}/files`, {
+    multipart: { files: { name: 'plugins.js', mimeType: 'text/javascript', buffer: Buffer.from(next) }, paths: JSON.stringify(['www/js/plugins.js']) },
+  });
+  expect(r.status(), await r.text()).toBe(201);
+  await owner.api.waitJob(pid, (await r.json()).id);
+  expect((await owner.api.ok('GET', editUrl)).conflicts).toBe(1);
+  await page.reload();
+  await page.locator('.tool-tree').getByText('js').click();
+  await tile(page, 'www/js/plugins.js').click();
+  await expect(viewer.locator('.viewer-conflicts')).toContainText('有 1 处预编辑与当前原文件对不上');
 });
 
 test('多选删除附件；数据文件不能删除或改名', async ({ page }) => {

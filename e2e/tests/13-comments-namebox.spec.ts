@@ -42,6 +42,26 @@ test('公共事件名默认隐藏', async ({ page }) => {
   await expect(page.locator('.entry-alert')).toContainText('公共事件菜单类插件会把它显示为菜单项');
 });
 
+test('MapInfos 的地图名默认隐藏，位置说明带上级地图', async ({ page }) => {
+  const files: { path: string }[] = await owner.api.ok('GET', `/projects/${pid}/files`);
+  const path = files.find((f) => f.path.endsWith('Map001.json'))!.path.replace(/Map001\.json$/, 'MapInfos.json');
+  const info = (id: number, name: string, parentId: number) => ({ id, expanded: false, name, order: id, parentId, scrollX: 0, scrollY: 0 });
+  const body = JSON.stringify([null, info(1, 'West District', 0), info(2, 'Diner', 1)]);
+  const r = await owner.api.ctx.post(`/api/projects/${pid}/files`, {
+    multipart: { files: { name: 'MapInfos.json', mimeType: 'application/json', buffer: Buffer.from(body) }, paths: JSON.stringify([path]) },
+  });
+  expect(r.status(), await r.text()).toBe(201);
+  const job = await owner.api.waitJob(pid, (await r.json()).id);
+  expect(job.result.files[0]).toMatchObject({ path, status: 'created', total: 2 });
+
+  await useAs(page, owner);
+  await openEditor(page, pid, 'stage=HIDDEN&category=mapName');
+  await expect(page.locator('.entry-item .entry-item-src')).toHaveText(['West District', 'Diner']);
+  await page.locator('.entry-item').filter({ hasText: 'Diner' }).click();
+  await expect(page.locator('.entry-context')).toHaveText('地图 #2 · 位于 West District');
+  await expect(page.locator('.entry-alert')).toContainText('编辑器地图树（MapInfos）里的地图名');
+});
+
 test('名字框中的名字可以翻译：不报缺少控制符，术语照常提示', async ({ page }) => {
   await owner.api.ok('POST', `/projects/${pid}/terms`, { term: 'Lucy', translation: '露西' });
   await useAs(page, owner);

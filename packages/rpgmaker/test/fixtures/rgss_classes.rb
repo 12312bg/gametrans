@@ -80,6 +80,11 @@ module RPG
       @bgm = RPG::BGM.new('Town1'); @encounter_step = 30; @data = Table.new(w, h, 3); @events = {}
     end
   end
+  class MapInfo
+    def initialize(name, parent_id, order)
+      @name = s(name); @parent_id = parent_id; @order = order; @expanded = false; @scroll_x = 320; @scroll_y = 240
+    end
+  end
   class CommonEvent
     def initialize(id, name, list) @id = id; @name = s(name); @trigger = 0; @switch_id = 1; @list = list end
   end

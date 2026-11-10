@@ -92,6 +92,9 @@ def build(engine)
   map.events[5] = ev2
   dump("Map001.#{ext}", map)
 
+  # 编辑器的地图树：{ 地图 ID => RPG::MapInfo }，键的顺序与 ID 无关
+  dump("MapInfos.#{ext}", { 3 => RPG::MapInfo.new('村の家', 1, 2), 1 => RPG::MapInfo.new('はじまりの村', 0, 1), 2 => RPG::MapInfo.new('', 0, 3) })
+
   dump("CommonEvents.#{ext}", [nil, RPG::CommonEvent.new(1, '共通', [
     cmd(108, 0, [s('<Help Description>')]),
     cmd(408, 0, [s('行き先を選んでください')]),

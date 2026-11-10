@@ -26,7 +26,7 @@ describe.each([
   ['RMVX', 'rvdata'],
   ['RMVXACE', 'rvdata2'],
 ] as [Engine, string][])('%s', (engine, ext) => {
-  const files = ['Map001', 'CommonEvents', 'Troops', 'Actors', 'Items', 'Skills', 'States', 'System', 'Scripts'];
+  const files = ['Map001', 'MapInfos', 'CommonEvents', 'Troops', 'Actors', 'Items', 'Skills', 'States', 'System', 'Scripts'];
 
   it('地图：对话合并、选项、改名、脚本', () => {
     const { entries } = extractEntries(`Data/Map001.${ext}`, rgss(`Map001.${ext}`), engine);
@@ -385,5 +385,54 @@ describe('注释与公共事件名', () => {
     expect(out[2].name).toBe('回家');
     expect(list.slice(0, 3).map((c) => c.parameters[0])).toEqual(['<Help Description>', '请选择目的地！', '</Help Description>']);
     expect(list.map((c) => c.code)).toEqual(JSON.parse(Buffer.from(bytes).toString('utf8'))[2].list.map((c: { code: number }) => c.code));
+  });
+});
+
+describe('地图名（MapInfos）', () => {
+  // 编辑器的排版：每张地图一行；order 是地图树中的顺序
+  const mapInfos = [
+    'null',
+    '{"id":1,"expanded":false,"name":"West District","order":1,"parentId":0,"scrollX":0,"scrollY":0}',
+    '{"id":2,"expanded":false,"name":"Kitchen","order":3,"parentId":3,"scrollX":0,"scrollY":0}',
+    '{"id":3,"expanded":true,"name":"Diner","order":2,"parentId":1,"scrollX":0,"scrollY":0}',
+    '{"id":4,"expanded":false,"name":"Kitchen","order":4,"parentId":0,"scrollX":0,"scrollY":0}',
+    '{"id":5,"expanded":false,"name":"","order":5,"parentId":0,"scrollX":0,"scrollY":0}',
+  ];
+  const bytes = new TextEncoder().encode(`[\n${mapInfos.join(',\n')}\n]`);
+
+  it('MV/MZ：按地图树顺序提取，默认隐藏，位置说明带上级路径以区分同名地图', () => {
+    const { entries, kind } = extractEntries('data/MapInfos.json', bytes, 'RMMV');
+    expect(kind).toBe('map_infos');
+    expect(entries.map((e) => [e.key, e.original])).toEqual([
+      ['1/name', 'West District'],
+      ['3/name', 'Diner'],
+      ['2/name', 'Kitchen'],
+      ['4/name', 'Kitchen'],
+    ]);
+    expect(entries.every((e) => e.category === 'mapName' && e.danger)).toBe(true);
+    expect(entries.map((e) => zh(e.context))).toEqual(['地图 #1', '地图 #3 · 位于 West District', '地图 #2 · 位于 West District / Diner', '地图 #4']);
+    expect(en(entries[2].context)).toBe('Map #2 · Under West District / Diner');
+  });
+
+  it('MV/MZ：回写只改地图名，保持每张地图一行', () => {
+    const { data, applied } = applyTranslations('data/MapInfos.json', bytes, 'RMMV', new Map([['2/name', '厨房'], ['1/name', '西区']]));
+    expect(applied).toBe(2);
+    const expected = [...mapInfos];
+    expected[1] = expected[1].replace('"West District"', '"西区"');
+    expected[2] = expected[2].replace('"Kitchen"', '"厨房"');
+    expect(Buffer.from(data).toString('utf8')).toBe(`[\n${expected.join(',\n')}\n]`);
+  });
+
+  it.each([
+    ['RMXP', 'rxdata'],
+    ['RMVX', 'rvdata'],
+    ['RMVXACE', 'rvdata2'],
+  ] as [Engine, string][])('%s：从 { ID => RPG::MapInfo } 中提取', (engine, ext) => {
+    const { entries } = extractEntries(`Data/MapInfos.${ext}`, rgss(`MapInfos.${ext}`), engine);
+    expect(entries.map((e) => [e.key, e.original, zh(e.context)])).toEqual([
+      ['1/name', 'はじまりの村', '地图 #1'],
+      ['3/name', '村の家', '地图 #3 · 位于 はじまりの村'],
+    ]);
+    expect(entries.every((e) => e.category === 'mapName' && e.danger)).toBe(true);
   });
 });

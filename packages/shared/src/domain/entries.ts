@@ -45,7 +45,7 @@ export const DANGER_CATEGORIES: EntryCategory[] = ['variable', 'eventName', 'com
 /** 原文相同时译文需要保持一致的分类：脚本里赋值与比较的往往是同一个值 */
 export const LINKED_CATEGORIES: EntryCategory[] = ['script', 'plugin'];
 
-export const HISTORY_ACTIONS = ['TRANSLATE', 'STAGE', 'ROLLBACK', 'TM_FILL', 'IMPORT', 'SOURCE_CHANGED', 'BATCH', 'SYNC'] as const;
+export const HISTORY_ACTIONS = ['TRANSLATE', 'STAGE', 'ROLLBACK', 'TM_FILL', 'IMPORT', 'SOURCE_CHANGED', 'BATCH', 'SYNC', 'REPLACE'] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
 export const JOB_TYPES = ['PARSE', 'EXPORT'] as const;

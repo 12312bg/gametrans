@@ -5,12 +5,16 @@ import {
   ContextPart,
   ENTRY_CATEGORIES,
   LINKED_CATEGORIES,
+  PERMISSIONS,
+  ReplaceOptions,
   STAGES,
   Stage,
   can,
   formatContext,
   permissionForTransition,
   permissionToEdit,
+  buildMatcher,
+  replaceWithSegments,
 } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { AccessService, ProjectContext } from '../common/access.service';
@@ -369,6 +373,71 @@ export class EntriesService {
       await this.activity.log(projectId, userId, 'entries.sync', { text, count: ids.length });
     }
     return { affected: allowed.length, skipped: pending.length - allowed.length };
+  }
+
+  /**
+   * 批量替换译文（审核员及以上）。只改当前用户有权修改的词条，状态不变，写入历史可回滚；
+   * dryRun 时只返回预览。未指定范围时为整个项目（含已隐藏）。
+   */
+  async replace(ctx: ProjectContext, o: ReplaceOptions & { filter?: EntryFilter; dryRun?: boolean }, t: Translator) {
+    this.access.assert(ctx, PERMISSIONS.REVIEW);
+    const re = buildMatcher(o);
+    if (!re) throw fail('REPLACE_INVALID_PATTERN');
+    const projectId = ctx.project.id;
+    const where = this.buildWhere(projectId, o.filter ?? { stage: STAGES.join(',') });
+    // 普通文本先用数据库缩小范围，最终以 JS 的匹配结果为准
+    const narrow: Prisma.EntryWhereInput = o.regex
+      ? { translation: { not: '' } }
+      : { translation: { contains: escapeLike(o.find), ...(o.caseSensitive ? {} : { mode: 'insensitive' as const }) } };
+    const rows = await this.prisma.entry.findMany({
+      where: { AND: [where, narrow] },
+      select: { id: true, key: true, translation: true, stage: true, version: true, contextData: true, contextSearch: true, file: { select: { path: true } } },
+      orderBy: [{ file: { path: 'asc' } }, { sortOrder: 'asc' }],
+      take: MAX_BATCH,
+    });
+    const changes: (typeof rows[number] & { after: string })[] = [];
+    let skipped = 0;
+    let occurrences = 0;
+    for (const r of rows) {
+      const { result, count } = replaceWithSegments(r.translation, re, o);
+      if (!count || result === r.translation) continue;
+      if (!can(ctx, permissionToEdit(r.stage as Stage))) {
+        skipped++;
+        continue;
+      }
+      occurrences += count;
+      changes.push({ ...r, after: result });
+    }
+    if (o.dryRun) {
+      const items = changes.slice(0, 200).map(({ after, translation, version: _v, ...r }) => ({ ...withContextText(r, t), before: translation, after }));
+      return { affected: changes.length, skipped, occurrences, items };
+    }
+
+    const userId = ctx.user!.id;
+    const note = `${o.find} → ${o.replace}`.slice(0, 200);
+    let affected = 0;
+    for (const part of chunk(changes, 2000)) {
+      // 版本号不一致说明期间被他人修改，跳过
+      const updated = await this.prisma.$queryRaw<{ id: string; stage: Stage; translation: string }[]>`
+        UPDATE "Entry" AS e
+        SET "translation" = v.t, "version" = e."version" + 1, "updatedAt" = now()
+        FROM (
+          SELECT unnest(${part.map((c) => c.id)}::text[]) AS id,
+                 unnest(${part.map((c) => c.after)}::text[]) AS t,
+                 unnest(${part.map((c) => c.version)}::int[]) AS ver
+        ) AS v
+        WHERE e.id = v.id AND e."version" = v.ver
+        RETURNING e.id, e.stage, e.translation`;
+      affected += updated.length;
+      await this.prisma.entryHistory.createMany({
+        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'REPLACE', translation: u.translation, stage: u.stage, note })),
+      });
+    }
+    if (affected) {
+      const short = (s: string) => (s.length > 30 ? `${s.slice(0, 30)}…` : s);
+      await this.activity.log(projectId, userId, 'entries.replace', { find: short(o.find), replace: short(o.replace), count: affected });
+    }
+    return { affected, skipped: skipped + (changes.length - affected), occurrences };
   }
 
   /** 翻译记忆：按原文三元组相似度推荐项目内已有译文 */

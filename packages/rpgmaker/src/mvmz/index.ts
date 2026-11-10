@@ -39,13 +39,13 @@ const jsonAdapter: CommandAdapter<JsonCommand> = {
 const decoder = new TextDecoder('utf-8');
 const encoder = new TextEncoder();
 
-function decodeText(bytes: Uint8Array): { text: string; bom: boolean } {
+export function decodeText(bytes: Uint8Array): { text: string; bom: boolean } {
   const text = decoder.decode(bytes);
   const bom = text.charCodeAt(0) === 0xfeff;
   return { text: bom ? text.slice(1) : text, bom };
 }
 
-const encodeText = (text: string, bom: boolean) => encoder.encode(bom ? `﻿${text}` : text);
+export const encodeText = (text: string, bom: boolean) => encoder.encode(bom ? `﻿${text}` : text);
 
 /** 按编辑器的排版输出：数据库为 "[\nnull,\n{...}\n]"，地图的 events 每个事件一行 */
 export function stringifyLike(original: string, data: unknown): string {
@@ -169,9 +169,8 @@ function walkSystemJson(sys: Json, slots: Slot[]): void {
   }
 }
 
-/** js/plugins.js：var $plugins = [ {...}, ... ]; */
-export function parsePluginsJs(bytes: Uint8Array, _opts: ParseOptions): ParsedDocument {
-  const { text, bom } = decodeText(bytes);
+/** 拆出 js/plugins.js 中的 $plugins 数组 */
+export function splitPluginsJs(text: string) {
   const at = text.indexOf('$plugins');
   const start = text.indexOf('[', at);
   const end = text.lastIndexOf(']');
@@ -183,6 +182,17 @@ export function parsePluginsJs(bytes: Uint8Array, _opts: ParseOptions): ParsedDo
   } catch (e) {
     throw new UnsupportedFileError('PLUGINS_INVALID', { detail: (e as Error).message });
   }
+  return { prefix, body, suffix, plugins };
+}
+
+/** 按原排版写回 $plugins：每个插件一行或整体一行 */
+export const joinPluginsJs = (prefix: string, body: string, suffix: string, plugins: unknown[]) =>
+  prefix + (/^\[\s*\n/.test(body) ? `[\n${plugins.map((x) => JSON.stringify(x)).join(',\n')}\n]` : JSON.stringify(plugins)) + suffix;
+
+/** js/plugins.js：var $plugins = [ {...}, ... ]; */
+export function parsePluginsJs(bytes: Uint8Array, _opts: ParseOptions): ParsedDocument {
+  const { text, bom } = decodeText(bytes);
+  const { prefix, body, suffix, plugins } = splitPluginsJs(text);
   const slots: Slot[] = [];
   const walk: WalkContext = { emit: (s) => slots.push(s), finalizers: [] };
   const seen = new Map<string, number>();
@@ -209,8 +219,7 @@ export function parsePluginsJs(bytes: Uint8Array, _opts: ParseOptions): ParsedDo
     warnings: [],
     serialize: () => {
       for (const fin of walk.finalizers.splice(0)) fin();
-      const out = /^\[\s*\n/.test(body) ? `[\n${plugins.map((x) => JSON.stringify(x)).join(',\n')}\n]` : JSON.stringify(plugins);
-      return encodeText(prefix + out + suffix, bom);
+      return encodeText(joinPluginsJs(prefix, body, suffix, plugins), bom);
     },
   };
 }

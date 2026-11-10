@@ -1135,3 +1135,113 @@ kbd {
 .tool-tree .ant-tree-treenode-selected .folder-title .muted {
   color: #fff;
 }
+
+/* ───────── 批量替换 / 差异 ───────── */
+mark.diff-del {
+  background: rgba(239, 68, 68, 0.18);
+  color: inherit;
+  text-decoration: line-through;
+  padding: 0 1px;
+}
+mark.diff-ins {
+  background: rgba(16, 185, 129, 0.22);
+  color: inherit;
+  padding: 0 1px;
+}
+
+/* ───────── 附件资源管理器 ───────── */
+.explorer .is-data,
+.explorer tr.is-data td {
+  opacity: 0.55;
+}
+.explorer .is-data:hover {
+  opacity: 0.8;
+}
+.folder-title.locked {
+  color: var(--muted);
+}
+.folder-tile.locked .folder-icon {
+  color: #a8a29e;
+}
+.folder-tile .tile-thumb {
+  position: relative;
+}
+.folder-lock {
+  position: absolute;
+  right: calc(50% - 30px);
+  bottom: 22px;
+  font-size: 16px;
+  color: var(--muted);
+}
+.tile-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  opacity: 0;
+}
+.explorer-item:hover .tile-more {
+  opacity: 1;
+}
+.explorer-item .tile-meta .ant-tag {
+  margin-inline-start: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 4px;
+}
+.kind-icon {
+  font-size: 44px;
+  color: var(--muted);
+}
+.kind-text,
+.kind-data {
+  color: #3b82f6;
+}
+.kind-audio {
+  color: #10b981;
+}
+.code-editor,
+.diff-view {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+}
+.code-editor .cm-editor,
+.diff-view .cm-mergeView,
+.diff-view > .cm-editor {
+  height: 100%;
+}
+.viewer-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 64vh;
+  overflow: auto;
+  border-radius: 8px;
+  background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--border) 0% 50%) 50% / 16px 16px;
+}
+.viewer-image img {
+  max-width: 100%;
+  max-height: 64vh;
+  object-fit: contain;
+}
+.viewer-audio {
+  width: 100%;
+}
+.touched-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.overwrite-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.overwrite-images figure {
+  margin: 0;
+  text-align: center;
+}
+.overwrite-images img {
+  max-width: 100%;
+  max-height: 280px;
+}

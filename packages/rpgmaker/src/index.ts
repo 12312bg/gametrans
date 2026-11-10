@@ -1,6 +1,7 @@
 import { ENGINE_EXTENSIONS, Engine, isRgssEngine } from '@gametrans/shared';
 import { parseMvMzJson, parsePluginsJs } from './mvmz';
 import { parseRgss } from './rgss';
+import { JsonChange, applyPreEdit } from './preedit';
 import { ExtractedEntry, ParsedDocument, UnsupportedFileError } from './types';
 
 export * from './types';
@@ -51,4 +52,19 @@ export function applyTranslations(path: string, bytes: Uint8Array, engine: Engin
     applied++;
   }
   return { data: doc.serialize(), applied };
+}
+
+export * from './preedit';
+
+/**
+ * 预编辑不能改动已提取的词条：应用后重新提取，键与原文必须与原文件完全一致。
+ * 返回被改动的词条（为空表示可以保存）。
+ */
+export function preEditTouchedEntries(path: string, bytes: Uint8Array, engine: Engine, patch: JsonChange[]) {
+  const before = new Map(extractEntries(path, bytes, engine).entries.map((e) => [e.key, e.original]));
+  const after = new Map(extractEntries(path, applyPreEdit(path, bytes, patch).data, engine).entries.map((e) => [e.key, e.original]));
+  const touched: { key: string; before?: string; after?: string }[] = [];
+  for (const [key, original] of before) if (after.get(key) !== original) touched.push({ key, before: original, after: after.get(key) });
+  for (const [key, original] of after) if (!before.has(key)) touched.push({ key, after: original });
+  return touched;
 }

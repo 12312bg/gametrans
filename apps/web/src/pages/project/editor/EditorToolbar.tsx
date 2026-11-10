@@ -1,4 +1,4 @@
-import { ClearOutlined, DownOutlined, QuestionCircleOutlined, ReloadOutlined, SelectOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ClearOutlined, DownOutlined, FileSearchOutlined, QuestionCircleOutlined, ReloadOutlined, SelectOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Dropdown, Input, Popover, Select, Space, Tooltip, Typography } from 'antd';
 import { BatchAction, ENTRY_CATEGORIES, STAGES } from '@gametrans/shared';
 import { useEffect, useState } from 'react';
@@ -27,13 +27,15 @@ interface ToolbarProps {
   files: FileItem[];
   canFill: boolean;
   onFill: () => void;
+  /** 批量替换译文（审核员及以上） */
+  onReplace?: () => void;
   canBatch: boolean;
   batchMode: boolean;
   onToggleBatch: () => void;
   onRefresh: () => void;
 }
 
-export function EditorToolbar({ filter, setParam, files, canFill, onFill, canBatch, batchMode, onToggleBatch, onRefresh }: ToolbarProps) {
+export function EditorToolbar({ filter, setParam, files, canFill, onFill, onReplace, canBatch, batchMode, onToggleBatch, onRefresh }: ToolbarProps) {
   const t = useT();
   const [search, setSearch] = useState(filter.q);
   useEffect(() => setSearch(filter.q), [filter.q]);
@@ -118,6 +120,11 @@ export function EditorToolbar({ filter, setParam, files, canFill, onFill, canBat
               {t('editor.fill')}
             </Button>
           </Tooltip>
+        )}
+        {onReplace && (
+          <Button icon={<FileSearchOutlined />} onClick={onReplace}>
+            {t('replace.open')}
+          </Button>
         )}
         {canBatch && (
           <Button type={batchMode ? 'primary' : 'default'} ghost={batchMode} icon={<SelectOutlined />} onClick={onToggleBatch}>

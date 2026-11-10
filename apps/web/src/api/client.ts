@@ -50,6 +50,18 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/** 读取二进制内容（预览、对比用） */
+export async function apiBlob(path: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { credentials: 'include', headers: { 'Accept-Language': currentLocale() } });
+  } catch {
+    throw new ApiError(t('error.NETWORK_ERROR'), 0, 'NETWORK_ERROR', null);
+  }
+  if (!res.ok) throw toError(await parse(res), res.status);
+  return res.blob();
+}
+
 /** 带进度的上传 */
 export function upload<T>(path: string, form: FormData, onProgress?: (pct: number) => void): Promise<T> {
   return new Promise((resolve, reject) => {

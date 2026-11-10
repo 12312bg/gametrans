@@ -9,3 +9,7 @@ onlyBuiltDependencies:
   - esbuild
   - "@nestjs/core"
   - msgpackr-extract
+# CodeMirror 的 state / view 必须只有一份，否则编辑器扩展会失效
+overrides:
+  "@codemirror/state": 6.7.6
+  "@codemirror/view": 6.43.15

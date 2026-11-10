@@ -1410,7 +1410,52 @@
       "get": {
         "operationId": "FilesController_download",
         "summary": "下载原文件",
-        "description": "需要文件管理权限。",
+        "description": "需要文件管理权限。`version=edited` 时下载应用预编辑后的内容（不含译文）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "original",
+                "edited"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      }
+    },
+    "/api/projects/{pid}/files/{fid}/edit": {
+      "get": {
+        "operationId": "FilesController_getEdit",
+        "summary": "预编辑内容",
+        "description": "返回易读格式的原文件与预编辑后的内容（MV/MZ 的 data/*.json 与 js/plugins.js 的 $plugins 数组）。其他格式 `editable` 为 false。",
         "parameters": [
           {
             "name": "pid",
@@ -1431,7 +1476,99 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      },
+      "put": {
+        "operationId": "FilesController_saveEdit",
+        "summary": "保存预编辑",
+        "description": "提交编辑后的完整 JSON。保存为相对原文件的字段变更，导出时先应用预编辑、再写入译文。不能改动已提取的词条原文或增删事件指令（409 PREEDIT_TOUCHES_ENTRIES）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "文件与任务"
+        ]
+      },
+      "delete": {
+        "operationId": "FilesController_clearEdit",
+        "summary": "撤销预编辑",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1659,6 +1796,10 @@
                   "paths": {
                     "type": "string",
                     "description": "可选，与 files 一一对应的相对路径 JSON 数组（上传文件夹时保留子目录）"
+                  },
+                  "keepEdits": {
+                    "type": "string",
+                    "description": "可选，覆盖同名附件时要保留预编辑的完整路径 JSON 数组；未列出的同名附件预编辑会被丢弃"
                   }
                 }
               }
@@ -1685,11 +1826,58 @@
         ]
       }
     },
-    "/api/projects/{pid}/attachments/{aid}/download": {
-      "get": {
-        "operationId": "AttachmentsController_download",
-        "summary": "下载附件",
-        "description": "需要文件管理权限；其他成员通过导出包获取附件。",
+    "/api/projects/{pid}/attachments/{aid}": {
+      "patch": {
+        "operationId": "AttachmentsController_rename",
+        "summary": "改名 / 移动附件",
+        "description": "新路径同样不能与数据文件或其他附件冲突。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameAttachmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      },
+      "delete": {
+        "operationId": "AttachmentsController_remove",
+        "summary": "删除附件",
         "parameters": [
           {
             "name": "pid",
@@ -1718,10 +1906,45 @@
         ]
       }
     },
-    "/api/projects/{pid}/attachments/{aid}": {
-      "delete": {
-        "operationId": "AttachmentsController_remove",
-        "summary": "删除附件",
+    "/api/projects/{pid}/attachments/delete": {
+      "post": {
+        "operationId": "AttachmentsController_removeMany",
+        "summary": "批量删除附件",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAttachmentsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      }
+    },
+    "/api/projects/{pid}/attachments/{aid}/edit": {
+      "put": {
+        "operationId": "AttachmentsController_saveEdit",
+        "summary": "保存预编辑",
+        "description": "只支持 UTF-8 文本附件。原件不变，导出时使用预编辑后的内容；保留原件的 BOM 与换行符；内容与原件相同时撤销预编辑。",
         "parameters": [
           {
             "name": "pid",
@@ -1736,6 +1959,105 @@
             "required": true,
             "in": "path",
             "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      },
+      "delete": {
+        "operationId": "AttachmentsController_clearEdit",
+        "summary": "撤销预编辑",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentModel"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "附件"
+        ]
+      }
+    },
+    "/api/projects/{pid}/attachments/{aid}/download": {
+      "get": {
+        "operationId": "AttachmentsController_download",
+        "summary": "下载附件",
+        "description": "需要文件管理权限；其他成员通过导出包获取附件。默认下载导出时使用的版本（有预编辑时为预编辑后的内容）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "aid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "original",
+                "edited"
+              ],
               "type": "string"
             }
           }
@@ -2127,6 +2449,48 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/replace": {
+      "post": {
+        "operationId": "EntriesController_replace",
+        "summary": "批量替换译文",
+        "description": "审核员及以上。只替换当前用户有权修改的词条，状态不变，写入历史可回滚。`dryRun: true` 时只返回预览（前 200 条明细）。未指定 filter 时为整个项目（含已隐藏）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3433,6 +3797,19 @@
           "finishedAt"
         ]
       },
+      "PreEditDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "预编辑后的完整文本",
+            "maxLength": 6291456
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
       "UserBriefModel": {
         "type": "object",
         "properties": {
@@ -3517,6 +3894,33 @@
           "created",
           "updated",
           "items"
+        ]
+      },
+      "RenameAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "新路径（相对游戏根目录），如 www/img/Quests.txt",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "DeleteAttachmentsDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ids"
         ]
       },
       "ContextPartModel": {
@@ -3747,6 +4151,41 @@
         },
         "required": [
           "action"
+        ]
+      },
+      "ReplaceDto": {
+        "type": "object",
+        "properties": {
+          "find": {
+            "type": "string",
+            "description": "查找内容",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "replace": {
+            "type": "string",
+            "description": "替换为，可以为空（即删除）",
+            "maxLength": 5000
+          },
+          "regex": {
+            "type": "boolean",
+            "description": "find 为正则表达式，replace 中可用 $1 等引用分组"
+          },
+          "caseSensitive": {
+            "type": "boolean"
+          },
+          "filter": {
+            "type": "object",
+            "description": "范围：筛选条件，字段同词条列表；不填表示整个项目（含已隐藏）"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "只预览不写入"
+          }
+        },
+        "required": [
+          "find",
+          "replace"
         ]
       },
       "RollbackDto": {

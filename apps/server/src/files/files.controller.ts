@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, StreamableFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { PERMISSIONS } from '@gametrans/shared';
 import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -9,6 +9,7 @@ import { fail } from '../common/errors';
 import { attachment } from '../common/http';
 import { StorageService } from '../common/storage.service';
 import { JobsService } from '../jobs/jobs.service';
+import { PreEditDto } from '../attachments/attachments.dto';
 import { FilesService } from './files.service';
 import { UploadInterceptor, fixName, parsePaths, tmpKeyOf } from './upload';
 
@@ -121,13 +122,52 @@ export class FilesController {
     return { ok: true };
   }
 
-  @ApiOperation({ summary: '下载原文件', description: '需要文件管理权限。' })
+  @ApiOperation({ summary: '下载原文件', description: '需要文件管理权限。`version=edited` 时下载应用预编辑后的内容（不含译文）。' })
+  @ApiQuery({ name: 'version', required: false, enum: ['original', 'edited'] })
   @ApiProduces('application/octet-stream')
   @Get(':fid/download')
-  async download(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string, @Res({ passthrough: true }) res: Response) {
+  async download(
+    @CurrentUser() user: AuthUser,
+    @Param('pid') pid: string,
+    @Param('fid') fid: string,
+    @Res({ passthrough: true }) res: Response,
+    @Query('version') version?: string,
+  ) {
     await this.access.require(user, pid, PERMISSIONS.MANAGE_FILES);
+    if (version === 'edited') {
+      const { file, data } = await this.files.editedBytes(pid, fid);
+      res.set({ 'Content-Type': 'application/octet-stream', 'Content-Disposition': attachment(file.path.split('/').pop() ?? 'file') });
+      return new StreamableFile(Buffer.from(data));
+    }
     const file = await this.files.get(pid, fid);
     res.set({ 'Content-Type': 'application/octet-stream', 'Content-Disposition': attachment(file.path.split('/').pop() ?? 'file') });
     return new StreamableFile(this.storage.stream(file.storageKey));
+  }
+
+  @ApiOperation({
+    summary: '预编辑内容',
+    description: '返回易读格式的原文件与预编辑后的内容（MV/MZ 的 data/*.json 与 js/plugins.js 的 $plugins 数组）。其他格式 `editable` 为 false。',
+  })
+  @Get(':fid/edit')
+  async getEdit(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string) {
+    await this.access.require(user, pid, PERMISSIONS.MANAGE_FILES);
+    return this.files.getEdit(pid, fid);
+  }
+
+  @ApiOperation({
+    summary: '保存预编辑',
+    description: '提交编辑后的完整 JSON。保存为相对原文件的字段变更，导出时先应用预编辑、再写入译文。不能改动已提取的词条原文或增删事件指令（409 PREEDIT_TOUCHES_ENTRIES）。',
+  })
+  @Put(':fid/edit')
+  async saveEdit(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string, @Body() dto: PreEditDto) {
+    await this.access.require(user, pid, PERMISSIONS.MANAGE_FILES);
+    return this.files.saveEdit(pid, fid, dto.content, user.id);
+  }
+
+  @ApiOperation({ summary: '撤销预编辑' })
+  @Delete(':fid/edit')
+  async clearEdit(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('fid') fid: string) {
+    await this.access.require(user, pid, PERMISSIONS.MANAGE_FILES);
+    return this.files.clearEdit(pid, fid, user.id);
   }
 }

@@ -1,4 +1,4 @@
-import { AppstoreOutlined, BookOutlined, CloudDownloadOutlined, FileTextOutlined, HistoryOutlined, SettingOutlined, TeamOutlined, TranslationOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BookOutlined, CloudDownloadOutlined, FileTextOutlined, HistoryOutlined, PaperClipOutlined, SettingOutlined, TeamOutlined, TranslationOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App, Badge, Button, Input, Menu, Modal, Result, Skeleton, Space, Typography } from 'antd';
 import { PERMISSIONS } from '@gametrans/shared';
@@ -66,6 +66,7 @@ export function ProjectLayout() {
     { key: '', icon: <AppstoreOutlined />, label: t('project.tab.overview') },
     { key: 'editor', icon: <TranslationOutlined />, label: t('project.tab.editor') },
     { key: 'files', icon: <FileTextOutlined />, label: t('project.tab.files') },
+    { key: 'attachments', icon: <PaperClipOutlined />, label: t('project.tab.attachments') },
     { key: 'terms', icon: <BookOutlined />, label: t('project.tab.terms') },
     {
       key: 'members',

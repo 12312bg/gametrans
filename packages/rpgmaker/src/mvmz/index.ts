@@ -2,6 +2,7 @@ import type { ContextPart } from '@gametrans/shared';
 import { ctx as c, fileStem } from '../context';
 import { CommandAdapter, WalkContext, walkEventList } from '../events';
 import { DATABASE_FIELDS, detectKind } from '../kinds';
+import { emitMapNames } from '../mapinfos';
 import { emitPluginValue } from '../plugin-params';
 import { ParseOptions, ParsedDocument, Slot, UnsupportedFileError } from '../types';
 
@@ -111,6 +112,18 @@ export function parseMvMzJson(bytes: Uint8Array, opts: ParseOptions): ParsedDocu
       const trPart = c.troop(tr.id as number, String(tr.name ?? ''));
       (tr.pages as Json[]).forEach((page, p) => events(page?.list, `${String(tr.id)}/pages/${p}/list`, [trPart, c.page(p)]));
     }
+  } else if (kind === 'map_infos' && Array.isArray(data)) {
+    const rows = (data as (Json | null)[]).filter((m): m is Json => !!m && typeof m === 'object');
+    emitMapNames(
+      rows.map((m) => ({
+        id: Number(m.id),
+        name: typeof m.name === 'string' ? m.name : undefined,
+        parentId: Number(m.parentId ?? 0),
+        order: Number(m.order ?? m.id),
+        set: (v) => (m.name = v),
+      })),
+      slots,
+    );
   } else if (kind === 'system' && data && typeof data === 'object') {
     walkSystemJson(data as Json, slots);
   } else if (DATABASE_FIELDS[kind] && Array.isArray(data)) {

@@ -54,6 +54,7 @@ const DANGER_HINT: Record<string, string> = {
   variable: 'entry.warnVariable',
   comment: 'entry.warnComment',
   eventName: 'entry.warnEventName',
+  mapName: 'entry.warnMapName',
 };
 /** 这些分类的文本里有插件读取的 <标签> */
 const TAGGED = new Set(['comment', 'note']);

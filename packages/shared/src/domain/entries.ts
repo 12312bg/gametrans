@@ -35,12 +35,12 @@ export const BATCH_ACTION_PERMISSION: Record<BatchAction, Permission> = {
 
 export const ENTRY_CATEGORIES = [
   'dialogue', 'choice', 'scroll', 'speaker', 'name', 'nickname', 'description',
-  'message', 'system', 'map', 'variable', 'eventName', 'comment', 'note', 'script', 'plugin', 'other',
+  'message', 'system', 'map', 'mapName', 'variable', 'eventName', 'comment', 'note', 'script', 'plugin', 'other',
 ] as const;
 export type EntryCategory = (typeof ENTRY_CATEGORIES)[number];
 
 /** 默认隐藏的危险分类 */
-export const DANGER_CATEGORIES: EntryCategory[] = ['variable', 'eventName', 'comment', 'note', 'script', 'plugin'];
+export const DANGER_CATEGORIES: EntryCategory[] = ['mapName', 'variable', 'eventName', 'comment', 'note', 'script', 'plugin'];
 
 /** 原文相同时译文需要保持一致的分类：脚本里赋值与比较的往往是同一个值 */
 export const LINKED_CATEGORIES: EntryCategory[] = ['script', 'plugin'];

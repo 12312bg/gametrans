@@ -3,6 +3,7 @@ import type { ContextPart, Engine, Issue } from '@gametrans/shared';
 import { ctx as c, fileStem } from '../context';
 import { CommandAdapter, WalkContext, walkEventList } from '../events';
 import { DATABASE_FIELDS, detectKind } from '../kinds';
+import { emitMapNames } from '../mapinfos';
 import { MarshalError, MarshalReader } from '../marshal/reader';
 import { IvarList, RHash, RObject, RString, RValue, decodeUtf8, encodeUtf8, numOf, strOf } from '../marshal/types';
 import { dump } from '../marshal/writer';
@@ -134,6 +135,24 @@ export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument
       const pages = tr.get('pages');
       if (Array.isArray(pages)) pages.forEach((page, p) => events(page, `${id}/pages/${p}/list`, [c.troop(id, nameOf(tr)), c.page(p)]));
     }
+  } else if (kind === 'map_infos' && root instanceof RHash) {
+    // { 地图 ID => RPG::MapInfo }
+    const rows = root.entries.flatMap(([k, info]) => {
+      const id = numOf(k);
+      if (id === undefined || !(info instanceof RObject)) return [];
+      return [{
+        id,
+        name: strOf(info.get('name')),
+        parentId: numOf(info.get('parent_id')) ?? 0,
+        order: numOf(info.get('order')) ?? id,
+        set: (v: string) => {
+          const cur = info.get('name');
+          if (cur instanceof RString) cur.text = v;
+          else info.set('name', RString.fromText(v, defIvars));
+        },
+      }];
+    });
+    emitMapNames(rows, slots);
   } else if (kind === 'system' && root instanceof RObject) {
     walkSystem(root, slots, defIvars);
   } else if (kind === 'scripts' && Array.isArray(root)) {

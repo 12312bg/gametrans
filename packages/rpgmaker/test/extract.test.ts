@@ -48,7 +48,8 @@ describe.each([
     expect(zh(scripts[0].context)).toMatch(/事件脚本 · 第1行$/);
     expect(zh(scripts[1].context)).toMatch(/条件分支（脚本） · \$game_variables\[3\] == "Normal"$/);
     if (engine === 'RMVXACE') expect(zh(scripts[2].context)).toMatch(/控制变量 #3（脚本） · 'Normal'$/);
-    expect(entries.some((e) => e.original === '開発者コメント')).toBe(false);
+    // 注释也提取（默认隐藏），有插件会显示注释中的文字
+    expect(entries.find((e) => e.original === '開発者コメント')).toMatchObject({ category: 'comment', danger: true });
     expect(byKey['events/1/pages/1/list/0']?.original).toBe('また来てね。');
     if (engine === 'RMVXACE') {
       expect(byKey.display_name.original).toBe('はじまりの村');
@@ -342,5 +343,47 @@ describe('事件脚本字符串与变量名', () => {
     expect(escapeJsString('a\\"b', '"')).toBe('a\\"b');
     expect(escapeJsString('x\\', '"')).toBe('x\\\\');
     expect(escapeJsString('${x}`', '`')).toBe('\\${x}\\`');
+  });
+});
+
+describe('注释与公共事件名', () => {
+  it('MZ：逐行提取注释，跳过标签行与无文字的行，注明所在标签块', () => {
+    const { entries } = extractEntries('data/CommonEvents.json', mz('CommonEvents.json'), 'RMMZ');
+    const comments = entries.filter((e) => e.category === 'comment');
+    expect(comments.map((e) => e.original)).toEqual(['Select your travel destination!', '     - Requirements -', '开发者备注：传送后刷新地图']);
+    expect(comments.every((e) => e.danger)).toBe(true);
+    expect(comments.map((e) => zh(e.context))).toEqual([
+      '公共事件 #2「Return Home」 · 注释 · 标签 <Help Description> · 第2行',
+      '公共事件 #2「Return Home」 · 注释 · 标签 <Subtext> · 第5行',
+      '公共事件 #2「Return Home」 · 注释 · 第1行',
+    ]);
+  });
+
+  it('公共事件名默认隐藏', () => {
+    const { entries } = extractEntries('data/CommonEvents.json', mz('CommonEvents.json'), 'RMMZ');
+    const names = entries.filter((e) => e.category === 'eventName');
+    expect(names.map((e) => [e.key, e.original, e.danger])).toEqual([
+      ['1/name', '共通', true],
+      ['2/name', 'Return Home', true],
+    ]);
+    expect(en(names[1].context)).toBe('Common event #2 "Return Home" · Name');
+    for (const [engine, ext] of [['RMXP', 'rxdata'], ['RMVX', 'rvdata'], ['RMVXACE', 'rvdata2']] as [Engine, string][]) {
+      const rg = extractEntries(`Data/CommonEvents.${ext}`, rgss(`CommonEvents.${ext}`), engine).entries;
+      expect(rg.find((e) => e.key === '1/name')).toMatchObject({ original: '共通', category: 'eventName' });
+      expect(zh(rg.find((e) => e.category === 'comment')!.context)).toContain('标签 <Help Description>');
+    }
+  });
+
+  it('回写注释只改对应的那一行，标签行不变', () => {
+    const path = 'data/CommonEvents.json';
+    const bytes = mz('CommonEvents.json');
+    const { entries } = extractEntries(path, bytes, 'RMMZ');
+    const help = entries.find((e) => e.original === 'Select your travel destination!')!;
+    const name = entries.find((e) => e.key === '2/name')!;
+    const out = JSON.parse(Buffer.from(applyTranslations(path, bytes, 'RMMZ', new Map([[help.key, '请选择目的地！'], [name.key, '回家']])).data).toString('utf8'));
+    const list = out[2].list as { code: number; parameters: string[] }[];
+    expect(out[2].name).toBe('回家');
+    expect(list.slice(0, 3).map((c) => c.parameters[0])).toEqual(['<Help Description>', '请选择目的地！', '</Help Description>']);
+    expect(list.map((c) => c.code)).toEqual(JSON.parse(Buffer.from(bytes).toString('utf8'))[2].list.map((c: { code: number }) => c.code));
   });
 });

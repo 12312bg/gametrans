@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { strToU8 } from 'fflate';
-import { UnsupportedFileError, applyTranslations } from '@gametrans/rpgmaker';
+import { JsonChange, UnsupportedFileError, applyPreEdit, applyTranslations, preEditTouchedEntries } from '@gametrans/rpgmaker';
 import { ContextPart, DEFAULT_LOCALE, Engine, Issue, formatContext, isLocale } from '@gametrans/shared';
 import { Job, Stage } from '@prisma/client';
 import { translator } from '../common/locale';
@@ -52,7 +52,8 @@ export class ExportService {
       });
       const map = new Map(rows.filter((r) => r.translation !== '' && stages.includes(r.stage)).map((r) => [r.key, r.translation]));
       try {
-        const out = applyTranslations(file.path, await this.storage.read(file.storageKey), project.engine as Engine, map);
+        const original = await this.storage.read(file.storageKey);
+        const out = applyTranslations(file.path, this.withPreEdit(file, original, project.engine as Engine, errors), project.engine as Engine, map);
         zip.addBytes(file.path, out.data);
         names.add(file.path.toLowerCase());
         applied += out.applied;
@@ -78,7 +79,7 @@ export class ExportService {
       }
       await progress(Math.round(((i + 1) / Math.max(files.length, 1)) * 90));
     }
-    const fileErrors = errors.length;
+    const fileErrors = errors.filter((e) => !e.code.startsWith('PREEDIT_')).length;
 
     let attachmentCount = 0;
     if (payload.includeAttachments !== false) {
@@ -88,10 +89,11 @@ export class ExportService {
         const lower = a.path.toLowerCase();
         if (locked.has(lower) || names.has(lower)) {
           errors.push({ name: a.path, code: 'ATTACHMENT_CONFLICT' });
-        } else if (!(await this.storage.exists(a.storageKey))) {
+        } else if (!(await this.storage.exists(a.editStorageKey ?? a.storageKey))) {
           errors.push({ name: a.path, code: 'ATTACHMENT_MISSING' });
         } else {
-          await zip.addStream(a.path, this.storage.stream(a.storageKey));
+          // 有预编辑时导出预编辑后的内容，原件不变
+          await zip.addStream(a.path, this.storage.stream(a.editStorageKey ?? a.storageKey));
           names.add(lower);
           attachmentCount++;
         }
@@ -101,5 +103,21 @@ export class ExportService {
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
     const safeName = project.name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60) || 'project';
     return { storageKey, fileName: `${safeName}_${project.targetLang}_${stamp}.zip`, size, fileCount: files.length - fileErrors, applied, attachmentCount, errors };
+  }
+
+  /**
+   * 数据文件的预编辑：先应用到原文件，再写入译文。原文件更新后，对不上的字段跳过并提示；
+   * 若预编辑会改动词条（键错位），本次不应用。
+   */
+  private withPreEdit(file: { path: string; editPatch: unknown }, original: Uint8Array, engine: Engine, errors: ExportResult['errors']): Uint8Array {
+    const patch = (file.editPatch as JsonChange[] | null) ?? [];
+    if (!patch.length) return original;
+    if (preEditTouchedEntries(file.path, original, engine, patch).length) {
+      errors.push({ name: file.path, code: 'PREEDIT_STALE' });
+      return original;
+    }
+    const { data, conflicts } = applyPreEdit(file.path, original, patch);
+    if (conflicts) errors.push({ name: file.path, code: 'PREEDIT_CONFLICT', params: { count: conflicts } });
+    return data;
   }
 }

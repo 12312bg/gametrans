@@ -94,10 +94,8 @@ test('预览接口：确认只能一次，确认后不能取消', async () => {
 
 test('附件：在锁定的目录树下新建 www/img，检查冲突，上传与覆盖', async ({ page }) => {
   await useAs(page, owner);
-  await page.goto(`/projects/${mvPid}/files`);
-  const card = page.locator('.attachments-card');
-  await expect(card).toContainText('还没有附件');
-  await btn(card, '上传附件').click();
+  await page.goto(`/projects/${mvPid}/attachments`);
+  await btn(page.locator('.explorer .tool-bar'), '上传').click();
   const dialog = page.getByRole('dialog').filter({ hasText: '目标目录' });
   await dialog.locator('.ant-upload-drag input[type=file]').setInputFiles([
     { name: 'Quests.txt', mimeType: 'text/plain', buffer: Buffer.from('クエスト一覧') },
@@ -121,16 +119,19 @@ test('附件：在锁定的目录树下新建 www/img，检查冲突，上传与
   await expect(rows.first()).toContainText('新增');
   await btn(dialog, '上传附件').click();
   await expect(toast(page, '已上传附件：新增 1 个，覆盖 0 个')).toBeVisible();
-  await expect(card.getByRole('row').filter({ hasText: 'www/img/Quests.txt' })).toBeVisible();
+  await page.locator('.tool-tree').getByText('img').click();
+  await expect(page.locator('[data-path="www/img/Quests.txt"]')).toBeVisible();
 
-  // 同一路径再次上传 → 覆盖
-  await btn(card, '上传附件').click();
+  // 同一路径再次上传 → 先确认变更再覆盖
+  await btn(page.locator('.explorer .tool-bar'), '上传').click();
   await dialog.locator('.ant-upload-drag input[type=file]').setInputFiles({ name: 'Quests.txt', mimeType: 'text/plain', buffer: Buffer.from('任务列表') });
-  await dialog.getByPlaceholder('例如 img 或 img/quests').fill('www/img');
+  await expect(rows.first()).toContainText('www/img/Quests.txt');
   await expect(rows.first()).toContainText('将覆盖');
   await btn(dialog, '上传附件').click();
+  const review = page.getByRole('dialog').filter({ hasText: '覆盖同名附件前确认变更' });
+  await btn(review, '确认覆盖并上传').click();
   await expect(toast(page, '已上传附件：新增 0 个，覆盖 1 个')).toBeVisible();
-  await expect(card).toContainText('附件（1）');
+  expect(await owner.api.ok('GET', `/projects/${mvPid}/attachments`)).toHaveLength(1);
 });
 
 test('导出：默认包含附件，可取消勾选', async ({ page }) => {
@@ -172,10 +173,12 @@ test('附件接口：路径校验与权限', async () => {
 
 test('删除附件', async ({ page }) => {
   await useAs(page, owner);
-  await page.goto(`/projects/${mvPid}/files`);
-  const card = page.locator('.attachments-card');
-  await card.getByRole('row').filter({ hasText: 'www/img/Quests.txt' }).getByRole('button', { name: 'delete' }).click();
-  await btn(page.locator('.ant-popconfirm'), '删除').click();
-  await expect(toast(page, '已删除附件')).toBeVisible();
-  await expect(card).toContainText('还没有附件');
+  await page.goto(`/projects/${mvPid}/attachments`);
+  await page.locator('.tool-tree').getByText('img').click();
+  const tile = page.locator('[data-path="www/img/Quests.txt"]');
+  await tile.hover();
+  await tile.locator('.tile-more').click();
+  await page.getByRole('menuitem', { name: /删除/ }).click();
+  await expect(toast(page, '已删除 1 个附件')).toBeVisible();
+  await expect(tile).toHaveCount(0);
 });

@@ -11,6 +11,7 @@ import { errorMessage } from '../../../utils';
 import { BatchBar, EditorToolbar, EntryFilter } from './EditorToolbar';
 import { EntryList, PAGE_SIZES } from './EntryList';
 import { EntryPanel, EntryPanelHandle } from './EntryPanel';
+import { ReplaceModal } from './ReplaceModal';
 import { useShortcuts } from './useShortcuts';
 
 const SIZE_KEY = 'gt-editor-page-size';
@@ -47,6 +48,7 @@ export default function EditorPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [sideTab, setSideTab] = useState('tm');
   const [batchMode, setBatchMode] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const panelRef = useRef<EntryPanelHandle>(null);
   const selectAfterLoad = useRef<'first' | 'last' | null>(null);
@@ -285,6 +287,7 @@ export default function EditorPage() {
         files={files.data ?? []}
         canFill={has(PERMISSIONS.REVIEW)}
         onFill={fill}
+        onReplace={has(PERMISSIONS.REVIEW) ? () => setReplaceOpen(true) : undefined}
         canBatch={batchActions.length > 0}
         batchMode={batchMode}
         onToggleBatch={() => {
@@ -293,6 +296,7 @@ export default function EditorPage() {
         }}
         onRefresh={() => list.refetch()}
       />
+      {replaceOpen && <ReplaceModal pid={pid} filter={filter} onClose={() => setReplaceOpen(false)} />}
       {batchMode && (
         <BatchBar actions={batchActions} pageIds={items.map((i) => i.id)} checked={checked} onChecked={setChecked} total={list.data?.total ?? 0} onRun={runBatch} />
       )}

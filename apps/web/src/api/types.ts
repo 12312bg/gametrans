@@ -59,6 +59,9 @@ export interface FileItem {
   sha256: string;
   /** 旧数据为中文字符串 */
   warnings: (Issue | string)[];
+  /** 有预编辑 */
+  edited?: boolean;
+  editedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   stats: StageCounts;
@@ -247,6 +250,20 @@ export interface Attachment {
   createdAt: string;
   updatedAt: string;
   createdBy: UserBrief | null;
+  /** 预编辑后的大小；没有预编辑时为 null */
+  editSize: number | null;
+  editedAt: string | null;
+  editedBy: UserBrief | null;
+}
+
+/** 数据文件的预编辑（易读格式的 JSON） */
+export interface FileEdit {
+  editable: boolean;
+  original: string | null;
+  edited: string | null;
+  changes: number;
+  editedAt: string | null;
+  editedBy: UserBrief | null;
 }
 
 export interface ApiToken {

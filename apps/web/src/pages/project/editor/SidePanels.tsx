@@ -196,7 +196,7 @@ export function HistoryTab({ pid, entry, canEdit, onRollback }: { pid: string; e
               <UserAvatar user={h.user} />
               <b>{h.user?.displayName ?? t('common.system')}</b>
               <Tag bordered={false}>{hasMessage(`history.${h.action}`) ? t(`history.${h.action}`) : h.action}</Tag>
-              {h.action === 'BATCH' && h.note && <span className="muted small">{historyNote(h.action, h.note, t)}</span>}
+              {(h.action === 'BATCH' || h.action === 'REPLACE') && h.note && <span className="muted small">{historyNote(h.action, h.note, t)}</span>}
               <StageTag stage={h.stage} />
               <Tooltip title={formatTime(h.createdAt)}>
                 <span className="muted small">{fromNow(h.createdAt)}</span>

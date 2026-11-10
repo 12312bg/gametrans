@@ -34,6 +34,11 @@ export interface EventListInfo {
   scriptOperand: boolean;
 }
 
+/** 注释中独占一行的开始 / 结束标签，如 <Help Description>、</Subtext>（不含取值） */
+const OPEN_TAG = /^<([A-Za-z][\w \-]*)>$/;
+const CLOSE_TAG = /^<\/([A-Za-z][\w \-]*)>$/;
+const HAS_LETTER = /\p{L}/u;
+
 const snippet = (code: string) => (code.length > 80 ? `${code.slice(0, 79)}…` : code);
 
 const nonBlank = (s: string | undefined): s is string => typeof s === 'string' && s.trim() !== '';
@@ -101,6 +106,38 @@ export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventLi
           apply: (out) => write(out.split('\n')),
         });
         i += lines.length;
+        break;
+      }
+      case 108: {
+        // 注释（108 首行 + 408 续行）：常是开发者备注，但有插件会显示其中的文字（如公共事件菜单的说明）。
+        // 逐行提取，跳过独占一行的标签，位置说明中注明所在的标签块。
+        const lines = [c, ...collect(i + 1, 408)];
+        let tag: string | undefined;
+        lines.forEach((line, k) => {
+          const text = ad.str(line, 0);
+          if (typeof text !== 'string') return;
+          const trimmed = text.trim();
+          const open = OPEN_TAG.exec(trimmed);
+          const close = CLOSE_TAG.exec(trimmed);
+          if (open || close) {
+            tag = open ? open[1] : undefined;
+            return;
+          }
+          if (!HAS_LETTER.test(text)) return;
+          ctx.emit({
+            key: `${key}/c/${k}`,
+            original: text,
+            context: at(
+              { k: 'ctx.cmd.comment' },
+              ...(tag ? [{ k: 'ctx.cmd.commentTag', p: { tag } }] : []),
+              ...(lines.length > 1 ? [{ k: 'ctx.line', p: { n: k + 1 } }] : []),
+            ),
+            category: 'comment',
+            danger: true,
+            set: (v) => ad.setStr(line, 0, v),
+          });
+        });
+        i += lines.length - 1;
         break;
       }
       case 111: {

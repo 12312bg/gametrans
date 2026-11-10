@@ -93,6 +93,9 @@ def build(engine)
   dump("Map001.#{ext}", map)
 
   dump("CommonEvents.#{ext}", [nil, RPG::CommonEvent.new(1, '共通', [
+    cmd(108, 0, [s('<Help Description>')]),
+    cmd(408, 0, [s('行き先を選んでください')]),
+    cmd(408, 0, [s('</Help Description>')]),
     cmd(engine == :xp ? 101 : 101, 0, engine == :xp ? [s('共通イベントの台詞')] : [s(''), 0, 0, 2]),
     *(engine == :xp ? [] : [cmd(401, 0, [s('共通イベントの台詞')])]),
     cmd(0, 0, [])

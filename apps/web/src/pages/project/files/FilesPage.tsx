@@ -11,7 +11,6 @@ import { ProgressBar } from '../../../components/ProgressBar';
 import { useT } from '../../../i18n';
 import { issueText } from '../../../i18n/format';
 import { errorMessage, formatSize, fromNow } from '../../../utils';
-import { AttachmentsCard } from './AttachmentsCard';
 import { ParseJobs } from './ParseJobs';
 import { PreviewModal } from './PreviewModal';
 import { UploadCard } from './UploadCard';
@@ -201,7 +200,6 @@ export default function FilesPage() {
           }}
         />
       </Card>
-      <AttachmentsCard canManage={canManage} dataPaths={existingPaths} />
     </Space>
   );
 }

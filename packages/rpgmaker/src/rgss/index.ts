@@ -121,7 +121,11 @@ export function parseRgss(bytes: Uint8Array, opts: ParseOptions): ParsedDocument
     }
   } else if (kind === 'common_events' && Array.isArray(root)) {
     for (const ce of root) {
-      if (ce instanceof RObject) events(ce, `${idOf(ce)}/list`, [c.commonEvent(idOf(ce), nameOf(ce))]);
+      if (!(ce instanceof RObject)) continue;
+      const cePart = c.commonEvent(idOf(ce), nameOf(ce));
+      // 公共事件名通常只在编辑器中使用，但公共事件菜单类插件会把它显示为菜单项
+      emitIvar(ce, 'name', `${idOf(ce)}/name`, [cePart, c.field('name')], 'eventName', true);
+      events(ce, `${idOf(ce)}/list`, [cePart]);
     }
   } else if (kind === 'troops' && Array.isArray(root)) {
     for (const tr of root) {

@@ -13,7 +13,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, App, Button, Dropdown, Input, Space, Tabs, Tag, Tooltip, Typography } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { Engine, PERMISSIONS, Permission, Stage, missingControlCodes } from '@gametrans/shared';
+import { Engine, PERMISSIONS, Permission, Stage, missingControlCodes, missingTags } from '@gametrans/shared';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { api } from '../../../api/client';
 import type { Entry, HistoryItem, Term } from '../../../api/types';
@@ -48,7 +48,15 @@ interface Props {
 }
 
 const lineCount = (s: string) => (s === '' ? 0 : s.split('\n').length);
-const DANGER_HINT: Record<string, string> = { script: 'entry.warnScript', plugin: 'entry.warnPlugin', variable: 'entry.warnVariable' };
+const DANGER_HINT: Record<string, string> = {
+  script: 'entry.warnScript',
+  plugin: 'entry.warnPlugin',
+  variable: 'entry.warnVariable',
+  comment: 'entry.warnComment',
+  eventName: 'entry.warnEventName',
+};
+/** 这些分类的文本里有插件读取的 <标签> */
+const TAGGED = new Set(['comment', 'note']);
 
 interface QaItem {
   type: 'warning' | 'info';
@@ -61,6 +69,8 @@ function qaCheck(entry: Entry, draft: string, engine: Engine, matched: Term[], t
   if (!draft) return out;
   const missing = missingControlCodes(entry.original, draft);
   if (missing.length) out.push({ type: 'warning', text: t('entry.qa.missingCodes', { codes: [...new Set(missing)].join(' ') }) });
+  const tags = TAGGED.has(entry.category) ? missingTags(entry.original, draft) : [];
+  if (tags.length) out.push({ type: 'warning', text: t('entry.qa.missingTags', { tags: [...new Set(tags)].join(' ') }) });
   const lo = lineCount(entry.original);
   const lt = lineCount(draft);
   if (entry.category === 'dialogue') {

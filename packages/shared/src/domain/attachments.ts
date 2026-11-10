@@ -37,3 +37,20 @@ export function attachmentConflict(path: string, dataFiles: string[], otherAttac
   if (otherDirs.has(lower) || parents.some((d) => others.has(d))) return 'conflict';
   return null;
 }
+
+/** 可以预览 / 预编辑的文本格式（还需是 UTF-8 编码） */
+export const TEXT_EXTENSIONS = ['.txt', '.json', '.js', '.csv', '.tsv', '.ini', '.cfg', '.md', '.xml', '.yml', '.yaml', '.html', '.htm', '.css', '.log', '.rb', '.py', '.lua', '.ks', '.tjs', '.svg'];
+export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'];
+export const AUDIO_EXTENSIONS = ['.ogg', '.m4a', '.mp3', '.wav'];
+/** 可以预编辑的最大文本大小 */
+export const PREEDIT_MAX_BYTES = 5 * 1024 * 1024;
+
+const extOf = (path: string) => {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  return name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
+};
+export const isTextPath = (path: string) => TEXT_EXTENSIONS.includes(extOf(path));
+export const isImagePath = (path: string) => IMAGE_EXTENSIONS.includes(extOf(path));
+export const isAudioPath = (path: string) => AUDIO_EXTENSIONS.includes(extOf(path));
+/** MV / MZ 加密图片 */
+export const isEncryptedImagePath = (path: string) => ['.rpgmvp', '.png_'].includes(extOf(path));

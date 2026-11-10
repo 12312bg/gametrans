@@ -9,6 +9,7 @@ import HomePage from './pages/home/HomePage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import ActivityPage from './pages/project/ActivityPage';
+import AttachmentsPage from './pages/project/attachments/AttachmentsPage';
 import EditorPage from './pages/project/editor/EditorPage';
 import ExportsPage from './pages/project/ExportsPage';
 import FilesPage from './pages/project/files/FilesPage';
@@ -30,6 +31,7 @@ export default function App() {
           <Route index element={<OverviewPage />} />
           <Route path="editor" element={<EditorPage />} />
           <Route path="files" element={<FilesPage />} />
+          <Route path="attachments" element={<AttachmentsPage />} />
           <Route path="terms" element={<TermsPage />} />
           <Route path="members" element={<MembersPage />} />
           <Route path="exports" element={<ExportsPage />} />

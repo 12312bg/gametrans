@@ -51,7 +51,13 @@ writeFileSync(join(out, 'Actors.json'), db([null,
 writeFileSync(join(out, 'Items.json'), db([null,
   { id: 1, animationId: 41, description: 'HPを500回復する。', name: 'ポーション', note: '<Help:薬>', price: 50 }]));
 writeFileSync(join(out, 'CommonEvents.json'), db([null,
-  { id: 1, list: [cmd(101, 0, ['', 0, 0, 2]), cmd(401, 0, ['共通イベント']), cmd(0, 0, [])], name: '共通', switchId: 1, trigger: 0 }]));
+  { id: 1, list: [cmd(101, 0, ['', 0, 0, 2]), cmd(401, 0, ['共通イベント']), cmd(0, 0, [])], name: '共通', switchId: 1, trigger: 0 },
+  // 公共事件菜单类插件：事件名显示为菜单项，注释中的标签块是说明文字
+  { id: 2, name: 'Return Home', switchId: 1, trigger: 0, list: [
+    cmd(108, 0, ['<Help Description>']), cmd(408, 0, ['Select your travel destination!']), cmd(408, 0, ['</Help Description>']),
+    cmd(408, 0, ['<Subtext>']), cmd(408, 0, ['     - Requirements -']), cmd(408, 0, ['</Subtext>']),
+    cmd(108, 0, ['开发者备注：传送后刷新地图']), cmd(408, 0, ['-----']),
+    cmd(101, 0, ['', 0, 0, 2]), cmd(401, 0, ['\\n<Lucy>\\n[1]～♥️']), cmd(0, 0, [])] }]));
 writeFileSync(join(out, 'Troops.json'), db([null,
   { id: 1, members: [], name: 'スライム*2', pages: [{ conditions: {}, list: [cmd(101, 0, ['', 0, 0, 2]), cmd(401, 0, ['スライムが現れた！']), cmd(0, 0, [])], span: 0 }] }]));
 writeFileSync(join(out, 'System.json'), JSON.stringify({

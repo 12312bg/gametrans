@@ -4,7 +4,7 @@ import { ApiConflictResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } f
 import { AccessService } from '../common/access.service';
 import { AuthUser, CurrentUser, Public } from '../common/decorators';
 import { T, Translator } from '../common/locale';
-import { BatchDto, FillDto, RollbackDto, UpdateEntryDto } from './entries.dto';
+import { BatchDto, FillDto, ReplaceDto, RollbackDto, UpdateEntryDto } from './entries.dto';
 import { EntriesService, EntryFilter, withContextText } from './entries.service';
 import { EntryModel, PagedEntriesModel } from '../common/api.models';
 
@@ -96,6 +96,17 @@ export class EntriesController {
   async sync(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('eid') eid: string) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
     return this.entries.syncLinked(ctx, eid);
+  }
+
+  @ApiOperation({
+    summary: '批量替换译文',
+    description:
+      '审核员及以上。只替换当前用户有权修改的词条，状态不变，写入历史可回滚。`dryRun: true` 时只返回预览（前 200 条明细）。未指定 filter 时为整个项目（含已隐藏）。',
+  })
+  @Post('entries/replace')
+  async replace(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Body() dto: ReplaceDto) {
+    const ctx = await this.access.require(user, pid, PERMISSIONS.REVIEW);
+    return this.entries.replace(ctx, dto, t);
   }
 
   @ApiOperation({ summary: '修改历史', description: '最近 100 条。' })

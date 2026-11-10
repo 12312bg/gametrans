@@ -15,7 +15,29 @@ export interface JsonChange {
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** 深比较，不计对象键的顺序（PostgreSQL jsonb 等存储会重排键） */
+export function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameJson(x, b[i]));
+  }
+  if (!isObject(a) || !isObject(b)) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => Object.prototype.hasOwnProperty.call(b, k) && sameJson(a[k], b[k]));
+}
+
+/** 按 template 的键顺序排列 value 中的对象键（template 中没有的键排在后面），保持原文件的排版 */
+function orderLike(template: unknown, value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const t = Array.isArray(template) ? template : [];
+    return value.map((x, i) => orderLike(t[i] ?? t[t.length - 1], x));
+  }
+  if (!isObject(value)) return value;
+  const t = isObject(template) ? template : {};
+  const keys = [...Object.keys(t).filter((k) => k in value), ...Object.keys(value).filter((k) => !(k in t))];
+  return Object.fromEntries(keys.map((k) => [k, orderLike(t[k], value[k])]));
+}
 
 /** 逐字段比较；数组长度不同时整体替换 */
 export function diffJson(a: unknown, b: unknown, path: JsonPath = [], out: JsonChange[] = []): JsonChange[] {
@@ -27,7 +49,7 @@ export function diffJson(a: unknown, b: unknown, path: JsonPath = [], out: JsonC
       else if (!(k in a)) out.push({ path: [...path, k], after: b[k] });
       else diffJson(a[k], b[k], [...path, k], out);
     }
-  } else if (!equal(a, b)) {
+  } else if (!sameJson(a, b)) {
     out.push({ path, before: a, after: b });
   }
   return out;
@@ -39,8 +61,8 @@ export function applyJsonPatch(root: unknown, changes: JsonChange[]): { value: u
   let value = root;
   for (const ch of changes) {
     if (!ch.path.length) {
-      if ('before' in ch && !equal(value, ch.before)) conflicts.push(ch);
-      else value = ch.after;
+      if ('before' in ch && !sameJson(value, ch.before)) conflicts.push(ch);
+      else value = orderLike(value, ch.after);
       continue;
     }
     let parent: unknown = value;
@@ -52,16 +74,19 @@ export function applyJsonPatch(root: unknown, changes: JsonChange[]): { value: u
     }
     const holder = parent as Record<string | number, unknown>;
     const exists = Object.prototype.hasOwnProperty.call(holder, last);
-    const ok = 'before' in ch ? exists && equal(holder[last], ch.before) : !exists || equal(holder[last], ch.after);
+    const ok = 'before' in ch ? exists && sameJson(holder[last], ch.before) : !exists || sameJson(holder[last], ch.after);
     if (!ok) {
       conflicts.push(ch);
       continue;
     }
-    if ('after' in ch) holder[last] = ch.after;
+    if ('after' in ch) holder[last] = orderLike(exists ? holder[last] : siblingOf(holder), ch.after);
     else delete holder[last];
   }
   return { value, conflicts };
 }
+
+/** 新增数组元素时参照相邻元素的键顺序 */
+const siblingOf = (holder: unknown) => (Array.isArray(holder) ? holder[holder.length - 1] : undefined);
 
 /** 便于阅读的 JSON：短的值、只含基本类型的数组（如地图图块）保持一行 */
 export function prettyJson(v: unknown, indent = ''): string {
@@ -90,11 +115,15 @@ export function readEditable(path: string, bytes: Uint8Array): unknown {
   }
 }
 
-/** 编辑器中显示的文本（应用预编辑后） */
-export function editableText(path: string, bytes: Uint8Array, patch?: JsonChange[]): string {
+/** 编辑器中显示的文本（应用预编辑后）；conflicts 为与原文件对不上、没有生效的变更数 */
+export function editableView(path: string, bytes: Uint8Array, patch?: JsonChange[]): { text: string; conflicts: number } {
   const value = readEditable(path, bytes);
-  return prettyJson(patch?.length ? applyJsonPatch(value, patch).value : value);
+  if (!patch?.length) return { text: prettyJson(value), conflicts: 0 };
+  const r = applyJsonPatch(value, patch);
+  return { text: prettyJson(r.value), conflicts: r.conflicts.length };
 }
+
+export const editableText = (path: string, bytes: Uint8Array, patch?: JsonChange[]) => editableView(path, bytes, patch).text;
 
 /** 由编辑后的文本计算相对原文件的变更 */
 export function computePatch(path: string, bytes: Uint8Array, editedText: string): JsonChange[] {

@@ -1228,6 +1228,9 @@ mark.diff-ins {
 .viewer-audio {
   width: 100%;
 }
+.viewer-conflicts {
+  margin-bottom: 8px;
+}
 .touched-list {
   margin: 0;
   padding-left: 18px;

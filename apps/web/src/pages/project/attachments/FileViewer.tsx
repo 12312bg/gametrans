@@ -26,6 +26,8 @@ interface TextState {
   editable: boolean;
   original: string | null;
   edited: string | null;
+  /** 没有生效的预编辑变更数（数据文件的原文件已更新） */
+  conflicts?: number;
   reason?: 'binaryData' | 'notText' | 'tooLarge';
 }
 
@@ -38,7 +40,7 @@ function useTextState(pid: string, item: ExplorerItem, enabled: boolean) {
     queryFn: async () => {
       if (item.source === 'data') {
         const e = await api<FileEdit>(`/projects/${pid}/files/${item.id}/edit`);
-        return e.editable ? { editable: true, original: e.original, edited: e.edited } : { editable: false, original: null, edited: null, reason: 'binaryData' };
+        return e.editable ? { editable: true, original: e.original, edited: e.edited, conflicts: e.conflicts } : { editable: false, original: null, edited: null, reason: 'binaryData' };
       }
       if ((item.attachment?.size ?? item.size) > PREEDIT_MAX_BYTES) return { editable: false, original: null, edited: null, reason: 'tooLarge' };
       const original = await loadText(contentUrl(pid, item, 'original'));
@@ -252,6 +254,7 @@ export function FileViewer({ pid, item, canManage, onClose }: { pid: string; ite
         </Space>
       }
     >
+      {canManage && !!s?.conflicts && <Alert type="warning" showIcon className="viewer-conflicts" message={t('viewer.conflicts', { count: s.conflicts })} />}
       <Tabs activeKey={tabs.some((x) => x.key === tab) ? tab : 'preview'} onChange={setTab} items={tabs} destroyOnHidden />
     </Modal>
   );

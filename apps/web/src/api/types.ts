@@ -262,6 +262,8 @@ export interface FileEdit {
   original: string | null;
   edited: string | null;
   changes: number;
+  /** 与原文件对不上、没有生效的变更数（原文件已更新） */
+  conflicts: number;
   editedAt: string | null;
   editedBy: UserBrief | null;
 }

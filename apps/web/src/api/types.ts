@@ -1,4 +1,4 @@
-import type { ContextPart, Engine, EntryCategory, Issue, JobStatus, Params, Permission, ProjectRole, Stage } from '@gametrans/shared';
+import type { ContextPart, Engine, EntryCategory, Issue, JobStatus, Params, Permission, ProjectRole, Stage, TermHistoryAction, TermSnapshot } from '@gametrans/shared';
 
 export interface UserBrief {
   id: string;
@@ -282,3 +282,54 @@ export interface ApiToken {
 export interface CreatedApiToken extends ApiToken {
   token: string;
 }
+
+/** 项目历史记录：词条修改 */
+export interface EntryHistoryRecord {
+  kind: 'entry';
+  id: string;
+  action: string;
+  createdAt: string;
+  user: UserBrief | null;
+  note: string;
+  entry: { id: string; key: string; fileId: string; path: string };
+  translation: string;
+  stage: Stage;
+  /** 上一条记录的译文与状态；该词条的第一条记录为 null */
+  prevTranslation: string | null;
+  prevStage: Stage | null;
+  oldOriginal?: string;
+  newOriginal?: string;
+}
+
+/** 项目历史记录：术语修改 */
+export interface TermHistoryRecord {
+  kind: 'term';
+  id: string;
+  action: TermHistoryAction;
+  createdAt: string;
+  user: UserBrief | null;
+  termId: string;
+  term: string;
+  before: TermSnapshot | null;
+  after: TermSnapshot | null;
+}
+
+/** 一次批量操作的合并记录 */
+export interface BatchHistoryRecord<K extends 'entry-batch' | 'term-batch', R> {
+  kind: K;
+  id: string;
+  batchId: string;
+  action: string;
+  note: string;
+  user: UserBrief | null;
+  createdAt: string;
+  count: number;
+  /** 前几条记录预览 */
+  samples: R[];
+}
+
+export type ProjectHistoryRecord =
+  | EntryHistoryRecord
+  | TermHistoryRecord
+  | BatchHistoryRecord<'entry-batch', EntryHistoryRecord>
+  | BatchHistoryRecord<'term-batch', TermHistoryRecord>;

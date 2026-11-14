@@ -1,4 +1,4 @@
-import type { ContextPart, EntryCategory } from '@gametrans/shared';
+import type { BranchStep, ContextPart, EntryCategory } from '@gametrans/shared';
 import type { Slot } from './types';
 import { emitPluginValue } from './plugin-params';
 import { ScriptLang, emitScriptStrings } from './script-strings';
@@ -53,8 +53,16 @@ const NAME_CHANGE: Record<number, [EntryCategory, string]> = {
  * 遍历事件指令列表。键使用指令在原始列表中的下标；
  * 回写时通过对象引用定位，插入 / 删除续行不影响其他词条。
  */
-export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventListInfo, ctx: WalkContext): void {
+export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventListInfo, outer: WalkContext): void {
   const snapshot = list.slice();
+  // 分支栈：每层记录分支头（选择 X 时、条件分支、否则…）的缩进，缩进回到该层或更外层时出栈
+  const stack: { indent: number; step: BranchStep }[] = [];
+  const choicesAt = new Map<number, string[]>();
+  const ifAt = new Map<number, IfInfo>();
+  const ctx: WalkContext = {
+    finalizers: outer.finalizers,
+    emit: (slot) => outer.emit(stack.length ? { ...slot, branch: stack.map((f) => f.step) } : slot),
+  };
   const { keyPrefix, label } = info;
   const at = (...parts: ContextPart[]) => [...label, ...parts];
   const collect = (from: number, code: number): C[] => {
@@ -67,6 +75,18 @@ export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventLi
     const c = snapshot[i];
     const code = ad.code(c);
     const key = `${keyPrefix}/${i}`;
+
+    const indent = ad.indent(c);
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+    const step = branchStep(c, code, ad, choicesAt.get(indent), ifAt.get(indent));
+    if (step) {
+      stack.push({ indent, step });
+      if (step.k === 'if') ifAt.set(indent, { type: step.type, args: step.args });
+    }
+    if (code === 102) {
+      const n = ad.arrLen(c, 0);
+      choicesAt.set(indent, Array.from({ length: n }, (_, k) => ad.arrStr(c, 0, k) ?? ''));
+    }
 
     switch (code) {
       case 101: {
@@ -284,4 +304,48 @@ function lineWriter<C>(list: C[], ad: CommandAdapter<C>, header: C, headerHoldsF
       current = current.slice(0, rest.length);
     }
   };
+}
+
+interface IfInfo {
+  type: number;
+  args: (string | number | boolean)[];
+}
+
+const BATTLE_RESULT: Record<number, 'win' | 'escape' | 'lose'> = { 601: 'win', 602: 'escape', 603: 'lose' };
+
+/** 只保留基本类型的参数，过长的字符串截断 */
+const primitives = (vals: unknown[]) =>
+  vals.map((v) => (typeof v === 'string' ? (v.length > 80 ? `${v.slice(0, 79)}…` : v) : typeof v === 'number' || typeof v === 'boolean' ? v : String(v ?? '')));
+
+/** 分支头指令 → 分支步骤；不是分支头时返回 undefined */
+function branchStep<C>(c: C, code: number, ad: CommandAdapter<C>, choices: string[] | undefined, lastIf: IfInfo | undefined): BranchStep | undefined {
+  switch (code) {
+    case 402: {
+      const i = Number(ad.param(c, 0) ?? 0);
+      return { k: 'choice', i: i + 1, text: choices?.[i] ?? ad.str(c, 1) ?? '' };
+    }
+    case 403:
+      return { k: 'cancel' };
+    case 111: {
+      const type = Number(ad.param(c, 0) ?? -1);
+      const args: unknown[] = [];
+      for (let j = 1; j < 6; j++) {
+        // Marshal 字符串需经适配器解码
+        const v = typeof ad.str(c, j) === 'string' ? ad.str(c, j) : ad.param(c, j);
+        if (v === undefined || v === null) break;
+        args.push(v);
+      }
+      return { k: 'if', type, args: primitives(args) };
+    }
+    case 411:
+      return { k: 'else', type: lastIf?.type ?? -1, args: lastIf?.args ?? [] };
+    case 601:
+    case 602:
+    case 603:
+      return { k: 'battle', result: BATTLE_RESULT[code] };
+    case 112:
+      return { k: 'loop' };
+    default:
+      return undefined;
+  }
 }

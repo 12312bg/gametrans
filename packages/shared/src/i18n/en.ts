@@ -12,6 +12,8 @@ export const en: Record<keyof typeof zhCN, string> = {
   'error.NO_FILES': 'Please choose files to upload',
   'error.SINGLE_FILE_REQUIRED': 'Please choose exactly one file',
   'error.EMPTY_TRANSLATION_STAGE': 'The translation is empty and cannot be set to this status',
+  'error.BULK_DUPLICATE_IDS': 'The same string appears more than once in the request',
+  'error.MARKUP_MISSING': 'The translation is missing control codes, placeholders or tags (strict mode). If the source itself is broken, add a note and save again',
   'error.NO_TERMS_TO_IMPORT': 'Nothing to import (one term per line: term,translation[,note])',
   'error.TOKEN_LIMIT': 'You can have at most {max} tokens. Delete unused ones first',
   'error.TOKEN_PROJECT_NOT_MEMBER': 'Tokens can only be limited to projects you belong to',
@@ -187,6 +189,7 @@ export const en: Record<keyof typeof zhCN, string> = {
   'activity.entries.replace': 'replaced "{find}" with "{replace}" in {count} translations',
   'activity.entries.sync': 'synced the translation of "{text}" to {count} identical strings',
   'activity.tm.fill': 'filled {count} strings from translation memory',
+  'activity.entries.bulkSave': 'saved {count} strings in bulk',
   'activity.terms.import': 'imported terms: {created} added, {updated} updated',
 
   'ctx.raw': '{text}',

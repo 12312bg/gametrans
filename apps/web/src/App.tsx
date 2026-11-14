@@ -12,6 +12,7 @@ import ActivityPage from './pages/project/ActivityPage';
 import AttachmentsPage from './pages/project/attachments/AttachmentsPage';
 import EditorPage from './pages/project/editor/EditorPage';
 import ExportsPage from './pages/project/ExportsPage';
+import ProjectHistoryPage from './pages/project/history/ProjectHistoryPage';
 import FilesPage from './pages/project/files/FilesPage';
 import MembersPage from './pages/project/MembersPage';
 import OverviewPage from './pages/project/OverviewPage';
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="terms" element={<TermsPage />} />
           <Route path="members" element={<MembersPage />} />
           <Route path="exports" element={<ExportsPage />} />
+          <Route path="history" element={<ProjectHistoryPage />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="." replace />} />

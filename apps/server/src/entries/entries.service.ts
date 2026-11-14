@@ -14,15 +14,39 @@ import {
   permissionForTransition,
   permissionToEdit,
   buildMatcher,
+  checkMarkup,
+  hasMarkupWarnings,
+  hasMissingMarkup,
+  MarkupReport,
   replaceWithSegments,
 } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { AccessService, ProjectContext } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
-import { fail } from '../common/errors';
+import { AppException, fail } from '../common/errors';
 import type { Translator } from '../common/locale';
 import { chunk, escapeLike, pageParams } from '../common/query';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
+
+export interface BulkSaveItem {
+  id: string;
+  version: number;
+  translation: string;
+  stage?: Stage;
+  /** 说明：写入修改历史；严格模式下附带说明可保存缺少控制符的译文（如原文控制符本身有误） */
+  note?: string;
+}
+
+export interface BulkSaveResult {
+  id: string;
+  status: 'saved' | 'unchanged' | 'conflict' | 'rejected' | 'error';
+  warnings?: MarkupReport;
+  error?: { code: string; message: string };
+  /** 处理后词条的当前译文、状态与版本 */
+  entry?: { translation: string; stage: Stage; version: number };
+}
 
 export interface EntryFilter {
   fileId?: string;
@@ -56,6 +80,15 @@ export const ENTRY_SELECT = {
 } satisfies Prisma.EntrySelect;
 
 const MAX_BATCH = 200_000;
+/** 整段事件最多返回的词条数 */
+const SCENE_LIMIT = 2000;
+
+/** 从「显示文章」的位置说明中取说话人（姓名框）与脸图 */
+function speakerOf(parts: ContextPart[] | null): { name?: string; face?: string } | null {
+  const p = parts?.find((x) => x.k.startsWith('ctx.cmd.showText'))?.p as { speaker?: string; face?: string; index?: number } | undefined;
+  if (!p || (!p.speaker && !p.face)) return null;
+  return { ...(p.speaker ? { name: p.speaker } : {}), ...(p.face ? { face: `${p.face}(${p.index ?? 0})` } : {}) };
+}
 
 /** 附加按请求语言渲染的位置说明；旧数据回退为原中文文本 */
 export function withContextText<T extends { contextData: unknown; contextSearch: string }>(e: T, t: Translator) {
@@ -79,6 +112,7 @@ export class EntriesService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly activity: ActivityService,
+    private readonly rt: RealtimeService,
   ) {}
 
   buildWhere(projectId: string, raw: EntryFilter): Prisma.EntryWhereInput {
@@ -174,11 +208,59 @@ export class EntriesService {
     return { before: before.reverse(), after };
   }
 
+  /**
+   * 整段事件：与该词条同一事件页（或公共事件、敌群页）的全部词条，按指令顺序排列，
+   * 带说话人与分支路径。不在事件中的词条返回 scene: null。
+   */
+  async scene(projectId: string, id: string, t: Translator) {
+    const e = await this.prisma.entry.findFirst({ where: { id, projectId }, select: { id: true, key: true, fileId: true, contextData: true, contextSearch: true, file: { select: { path: true } } } });
+    if (!e) throw fail('ENTRY_NOT_FOUND');
+    const at = e.key.indexOf('/list/');
+    if (at < 0) return { scene: null, items: [] };
+    const prefix = e.key.slice(0, at + '/list/'.length);
+    const rows = await this.prisma.entry.findMany({
+      where: { fileId: e.fileId, key: { startsWith: prefix } },
+      orderBy: { sortOrder: 'asc' },
+      take: SCENE_LIMIT + 1,
+      select: { id: true, key: true, original: true, translation: true, stage: true, version: true, category: true, contextData: true, branch: true, translator: USER_BRIEF, reviewer: USER_BRIEF },
+    });
+    const parts = (e.contextData as ContextPart[] | null) ?? null;
+    return {
+      scene: {
+        fileId: e.fileId,
+        path: e.file.path,
+        prefix,
+        // 位置说明去掉最后一段（具体指令），即事件 / 页
+        title: parts ? formatContext(parts.slice(0, -1), t) : e.contextSearch,
+        truncated: rows.length > SCENE_LIMIT,
+      },
+      items: rows.slice(0, SCENE_LIMIT).map(({ contextData, ...r }) => ({ ...r, speaker: speakerOf(contextData as ContextPart[] | null), current: r.id === id })),
+    };
+  }
+
   async update(ctx: ProjectContext, id: string, dto: { translation: string; stage?: Stage; version: number }) {
     const projectId = ctx.project.id;
-    const userId = ctx.user!.id;
     const e = await this.prisma.entry.findFirst({ where: { id, projectId } });
     if (!e) throw fail('ENTRY_NOT_FOUND');
+    if (!(await this.saveOne(ctx, e, dto))) return this.get(projectId, id);
+    const updated = await this.get(projectId, id);
+    this.rt.entry(projectId, ctx.user, updated);
+    return updated;
+  }
+
+  /**
+   * 保存一条词条的译文 / 状态（乐观锁）。返回 false 表示没有变化；
+   * 版本不一致抛出 ENTRY_CONFLICT，权限或状态不允许时抛出相应错误。
+   */
+  private async saveOne(
+    ctx: ProjectContext,
+    e: { id: string; translation: string; stage: string; version: number },
+    dto: { translation: string; stage?: Stage; version: number },
+    extra: { batchId?: string; note?: string } = {},
+  ): Promise<boolean> {
+    const projectId = ctx.project.id;
+    const userId = ctx.user!.id;
+    const id = e.id;
     if (dto.version !== e.version) {
       throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(projectId, id) });
     }
@@ -199,7 +281,7 @@ export class EntriesService {
     if (translation !== '' && next === 'UNTRANSLATED') next = 'TRANSLATED';
     const tp = permissionForTransition(cur, next);
     if (tp) this.access.assert(ctx, tp);
-    if (!changed && next === cur) return this.get(projectId, id);
+    if (!changed && next === cur) return false;
 
     const data: Prisma.EntryUncheckedUpdateManyInput = {
       translation,
@@ -216,9 +298,73 @@ export class EntriesService {
       throw fail('ENTRY_CONFLICT', undefined, { current: await this.get(projectId, id) });
     }
     await this.prisma.entryHistory.create({
-      data: { entryId: id, projectId, userId, action: changed ? 'TRANSLATE' : 'STAGE', translation, stage: next },
+      data: { entryId: id, projectId, userId, action: changed ? 'TRANSLATE' : 'STAGE', translation, stage: next, note: extra.note ?? '', batchId: extra.batchId },
     });
-    return this.get(projectId, id);
+    return true;
+  }
+
+  /**
+   * 批量保存（最多 500 条）：逐条独立处理，互不影响，逐条返回结果与控制符检查。
+   * strict 时，译文漏掉控制符 / 占位符 / 标签的词条不写入，除非该条附带说明（note）。
+   */
+  async bulkSave(ctx: ProjectContext, items: BulkSaveItem[], strict = false, t: Translator) {
+    const projectId = ctx.project.id;
+    const ids = [...new Set(items.map((i) => i.id))];
+    if (ids.length !== items.length) throw fail('BULK_DUPLICATE_IDS');
+    const rows = await this.prisma.entry.findMany({ where: { projectId, id: { in: ids } }, select: { id: true, original: true, category: true, translation: true, stage: true, version: true } });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const batchId = randomUUID();
+    const results: BulkSaveResult[] = [];
+    let saved = 0;
+    for (const item of items) {
+      const e = byId.get(item.id);
+      if (!e) {
+        results.push({ id: item.id, status: 'error', error: { code: 'ENTRY_NOT_FOUND', message: t('error.ENTRY_NOT_FOUND') } });
+        continue;
+      }
+      const translation = normalizeText(item.translation);
+      const markup = checkMarkup(e.original, translation, e.category);
+      const warnings = hasMarkupWarnings(markup) ? markup : undefined;
+      const note = item.note?.trim() || undefined;
+      if (strict && hasMissingMarkup(markup) && !note) {
+        results.push({ id: item.id, status: 'rejected', warnings, error: { code: 'MARKUP_MISSING', message: t('error.MARKUP_MISSING') } });
+        continue;
+      }
+      try {
+        const changed = await this.saveOne(ctx, e, { ...item, translation }, { batchId, note });
+        if (changed) saved++;
+        results.push({ id: item.id, status: changed ? 'saved' : 'unchanged', warnings });
+      } catch (err) {
+        if (!(err instanceof AppException)) throw err;
+        results.push({
+          id: item.id,
+          status: err.code === 'ENTRY_CONFLICT' ? 'conflict' : 'error',
+          warnings,
+          error: { code: err.code, message: t(`error.${err.code}`, err.params) },
+        });
+      }
+    }
+    // 附上保存后（或冲突时的当前）译文与状态，便于调用方核对
+    const after = await this.prisma.entry.findMany({ where: { projectId, id: { in: ids } }, select: { id: true, translation: true, stage: true, version: true } });
+    const now = new Map(after.map((r) => [r.id, r]));
+    for (const r of results) {
+      const cur = now.get(r.id);
+      if (cur) r.entry = { translation: cur.translation, stage: cur.stage as Stage, version: cur.version };
+    }
+    if (saved) {
+      await this.activity.log(projectId, ctx.user!.id, 'entries.bulkSave', { count: saved });
+      this.rt.entries(projectId, ctx.user, saved);
+    }
+    const count = (s: BulkSaveResult['status']) => results.filter((r) => r.status === s).length;
+    return {
+      saved,
+      unchanged: count('unchanged'),
+      conflict: count('conflict'),
+      rejected: count('rejected'),
+      error: count('error'),
+      batchId: saved ? batchId : null,
+      results,
+    };
   }
 
   async history(projectId: string, id: string) {
@@ -266,7 +412,9 @@ export class EntriesService {
         note: h.createdAt.toISOString(),
       },
     });
-    return this.get(ctx.project.id, id);
+    const updated = await this.get(ctx.project.id, id);
+    this.rt.entry(ctx.project.id, ctx.user, updated);
+    return updated;
   }
 
   async batch(ctx: ProjectContext, action: BatchAction, ids: string[] | undefined, filter: EntryFilter | undefined) {
@@ -302,6 +450,7 @@ export class EntriesService {
       groups.set(to, g);
     }
     const now = new Date();
+    const batchId = randomUUID();
     for (const [to, list] of groups) {
       for (const part of chunk(list, 5000)) {
         const data: Prisma.EntryUncheckedUpdateManyInput = { stage: to, version: { increment: 1 }, updatedAt: now };
@@ -318,12 +467,14 @@ export class EntriesService {
             translation: action === 'clear' ? '' : r.translation,
             stage: to,
             note: action,
+            batchId,
           })),
         });
       }
     }
     if (rows.length) {
       await this.activity.log(projectId, userId, 'entries.batch', { action, count: rows.length });
+      this.rt.entries(projectId, ctx.user, rows.length);
     }
     return { affected: rows.length };
   }
@@ -360,17 +511,19 @@ export class EntriesService {
     });
     if (allowed.length) {
       const ids = allowed.map((x) => x.id);
+      const batchId = randomUUID();
       const data: Prisma.EntryUncheckedUpdateManyInput = { translation: src.translation, stage: to, translatorId: userId, version: { increment: 1 }, updatedAt: new Date() };
       if (to === 'REVIEWED') data.reviewerId = userId;
       else if (to !== 'LOCKED') data.reviewerId = null;
       await this.prisma.$transaction([
         this.prisma.entry.updateMany({ where: { id: { in: ids } }, data }),
         this.prisma.entryHistory.createMany({
-          data: ids.map((entryId) => ({ entryId, projectId, userId, action: 'SYNC', translation: src.translation, stage: to })),
+          data: ids.map((entryId) => ({ entryId, projectId, userId, action: 'SYNC', translation: src.translation, stage: to, batchId })),
         }),
       ]);
       const text = src.original.length > 30 ? `${src.original.slice(0, 30)}…` : src.original;
       await this.activity.log(projectId, userId, 'entries.sync', { text, count: ids.length });
+      this.rt.entries(projectId, ctx.user, ids.length);
     }
     return { affected: allowed.length, skipped: pending.length - allowed.length };
   }
@@ -415,6 +568,7 @@ export class EntriesService {
 
     const userId = ctx.user!.id;
     const note = `${o.find} → ${o.replace}`.slice(0, 200);
+    const batchId = randomUUID();
     let affected = 0;
     for (const part of chunk(changes, 2000)) {
       // 版本号不一致说明期间被他人修改，跳过
@@ -430,12 +584,13 @@ export class EntriesService {
         RETURNING e.id, e.stage, e.translation`;
       affected += updated.length;
       await this.prisma.entryHistory.createMany({
-        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'REPLACE', translation: u.translation, stage: u.stage, note })),
+        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'REPLACE', translation: u.translation, stage: u.stage, note, batchId })),
       });
     }
     if (affected) {
       const short = (s: string) => (s.length > 30 ? `${s.slice(0, 30)}…` : s);
       await this.activity.log(projectId, userId, 'entries.replace', { find: short(o.find), replace: short(o.replace), count: affected });
+      this.rt.entries(projectId, ctx.user, affected);
     }
     return { affected, skipped: skipped + (changes.length - affected), occurrences };
   }
@@ -465,6 +620,43 @@ export class EntriesService {
     });
   }
 
+  /**
+   * 批量精确匹配：按原文（完全相同，换行统一为 \n）查找项目内已有译文。
+   * 同一原文有多种译法时全部返回，按「已审核优先、使用次数多优先」排序，每种译法附带最多 5 个来源。
+   */
+  async lookup(projectId: string, texts: string[], includeQuestioned = false) {
+    const wanted = [...new Set(texts.map(normalizeText))];
+    const stages: Stage[] = includeQuestioned ? ['TRANSLATED', 'REVIEWED', 'LOCKED', 'QUESTIONED'] : ['TRANSLATED', 'REVIEWED', 'LOCKED'];
+    const rows = await this.prisma.entry.findMany({
+      where: { projectId, original: { in: wanted }, translation: { not: '' }, stage: { in: stages } },
+      select: { id: true, key: true, original: true, translation: true, stage: true, updatedAt: true, file: { select: { path: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take: 50_000,
+    });
+    type Candidate = { translation: string; count: number; reviewed: number; stages: Partial<Record<Stage, number>>; lastUsed: Date; sources: { entryId: string; path: string; key: string; stage: Stage }[] };
+    const byText = new Map<string, Map<string, Candidate>>();
+    for (const r of rows) {
+      const m = byText.get(r.original) ?? new Map<string, Candidate>();
+      byText.set(r.original, m);
+      const c = m.get(r.translation) ?? { translation: r.translation, count: 0, reviewed: 0, stages: {}, lastUsed: r.updatedAt, sources: [] };
+      m.set(r.translation, c);
+      const stage = r.stage as Stage;
+      c.count++;
+      if (stage === 'REVIEWED' || stage === 'LOCKED') c.reviewed++;
+      c.stages[stage] = (c.stages[stage] ?? 0) + 1;
+      if (r.updatedAt > c.lastUsed) c.lastUsed = r.updatedAt;
+      if (c.sources.length < 5) c.sources.push({ entryId: r.id, path: r.file.path, key: r.key, stage });
+    }
+    return {
+      results: texts.map((text) => {
+        const cands = [...(byText.get(normalizeText(text))?.values() ?? [])].sort(
+          (a, b) => b.reviewed - a.reviewed || b.count - a.count || b.lastUsed.getTime() - a.lastUsed.getTime(),
+        );
+        return { text, matches: cands.map(({ lastUsed, ...c }) => ({ ...c, lastUsed })) };
+      }),
+    };
+  }
+
   /** 翻译记忆批量填充：把完全相同原文的已有译文填入未翻译词条 */
   async fill(ctx: ProjectContext, fileId?: string) {
     const projectId = ctx.project.id;
@@ -484,12 +676,16 @@ export class EntriesService {
       WHERE e."projectId" = ${projectId} AND e.stage = 'UNTRANSLATED' AND e.translation = ''
         AND e.original = src.original ${fileCond}
       RETURNING e.id, e.translation`;
+    const batchId = randomUUID();
     for (const part of chunk(updated, 5000)) {
       await this.prisma.entryHistory.createMany({
-        data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const })),
+        data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const, batchId })),
       });
     }
-    if (updated.length) await this.activity.log(projectId, userId, 'tm.fill', { count: updated.length });
+    if (updated.length) {
+      await this.activity.log(projectId, userId, 'tm.fill', { count: updated.length });
+      this.rt.entries(projectId, ctx.user, updated.length);
+    }
     return { affected: updated.length };
   }
 }

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { Job as BullJob } from 'bullmq';
 import { ActivityService } from '../common/activity.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { ExportService } from './export.service';
 import { JOB_QUEUE, JobError, JobsService } from './jobs.service';
 import { ParseService } from './parse.service';
@@ -19,6 +20,7 @@ export class JobsProcessor extends WorkerHost implements OnModuleInit {
     private readonly exporter: ExportService,
     private readonly activity: ActivityService,
     private readonly jobs: JobsService,
+    private readonly rt: RealtimeService,
   ) {
     super();
   }
@@ -49,6 +51,7 @@ export class JobsProcessor extends WorkerHost implements OnModuleInit {
         data: { status: 'SUCCEEDED', progress: 100, result: result as unknown as Prisma.InputJsonValue, finishedAt: new Date() },
       });
       if (job.type === 'EXPORT') await this.activity.log(job.projectId, job.createdById, 'export.create');
+      else this.rt.publish(job.projectId, { type: 'files', by: null });
     } catch (e) {
       this.logger.error(`Job ${job.id} failed`, (e as Error).stack);
       const error = e instanceof JobError ? e.code : (e as Error).message;

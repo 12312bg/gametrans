@@ -12,6 +12,8 @@ export const zhCN = {
   'error.NO_FILES': '请选择要上传的文件',
   'error.SINGLE_FILE_REQUIRED': '请选择一个文件',
   'error.EMPTY_TRANSLATION_STAGE': '译文为空，不能设为该状态',
+  'error.BULK_DUPLICATE_IDS': '同一词条在请求中出现了多次',
+  'error.MARKUP_MISSING': '译文缺少控制符、占位符或标签（严格模式）。如原文本身有误，请附上说明后再保存',
   'error.NO_TERMS_TO_IMPORT': '没有可导入的术语（每行格式：术语,译法[,备注]）',
   'error.TOKEN_LIMIT': '每个用户最多 {max} 个令牌，请先删除不用的令牌',
   'error.TOKEN_PROJECT_NOT_MEMBER': '只能限定到你参与的项目',
@@ -189,6 +191,7 @@ export const zhCN = {
   'activity.entries.replace': '把译文中的「{find}」替换为「{replace}」，共 {count} 条',
   'activity.entries.sync': '把「{text}」的译文同步到 {count} 处相同的字符串',
   'activity.tm.fill': '使用翻译记忆填充了 {count} 条词条',
+  'activity.entries.bulkSave': '批量保存了 {count} 条词条',
   'activity.terms.import': '导入术语：新增 {created} 条，更新 {updated} 条',
 
   // ── 词条位置说明 ──

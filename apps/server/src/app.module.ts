@@ -12,10 +12,12 @@ import { EntriesModule } from './entries/entries.module';
 import { ExportsModule } from './exports/exports.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { FilesModule } from './files/files.module';
+import { HistoryModule } from './history/history.module';
 import { JobsModule } from './jobs/jobs.module';
 import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { TermsModule } from './terms/terms.module';
 import { UsersModule } from './users/users.module';
 
@@ -38,6 +40,7 @@ function redisConnection(url: string) {
     JwtModule.register({ global: true, secret: config.jwtSecret }),
     BullModule.forRoot({ connection: redisConnection(config.redisUrl), prefix: 'gametrans' }),
     ...(config.staticDir ? [ServeStaticModule.forRoot({ rootPath: config.staticDir, exclude: ['/api/(.*)'] })] : []),
+    RealtimeModule,
     AuthModule,
     UsersModule,
     ProjectsModule,
@@ -47,6 +50,7 @@ function redisConnection(url: string) {
     JobsModule,
     EntriesModule,
     TermsModule,
+    HistoryModule,
     ExportsModule,
   ],
   providers: [

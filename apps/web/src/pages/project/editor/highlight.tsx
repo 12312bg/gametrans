@@ -1,6 +1,6 @@
 import { Tooltip } from 'antd';
 import { controlCodeSpans } from '@gametrans/shared';
-import { ReactNode } from 'react';
+import { MouseEvent, ReactNode } from 'react';
 import type { Term } from '../../../api/types';
 
 interface Range {
@@ -42,9 +42,24 @@ export function findTerms(text: string, terms: Term[]): { ranges: Range[]; match
   return { ranges, matched };
 }
 
-/** 渲染带控制符与术语高亮的文本 */
-export function Highlighted({ text, terms }: { text: string; terms: Term[] }) {
+/** 选中文字（复制原文）时不触发插入 */
+const hasSelection = () => !!window.getSelection()?.toString();
+
+/**
+ * 渲染带控制符与术语高亮的文本。
+ * 传入 onInsert 时，点击控制符插入该控制符，点击术语插入约定译法。
+ */
+export function Highlighted({ text, terms, onInsert, insertHint }: { text: string; terms: Term[]; onInsert?: (s: string) => void; insertHint?: string }) {
   const { ranges } = findTerms(text, terms);
+  const click = (s: string) =>
+    onInsert
+      ? {
+          role: 'button',
+          onMouseDown: (e: MouseEvent) => e.preventDefault(), // 保持译文框的焦点与光标
+          onClick: () => !hasSelection() && onInsert(s),
+        }
+      : {};
+  const cls = (base: string) => (onInsert ? `${base} insertable` : base);
   const out: ReactNode[] = [];
   let pos = 0;
   ranges.forEach((r, i) => {
@@ -58,17 +73,29 @@ export function Highlighted({ text, terms }: { text: string; terms: Term[] }) {
             <span>
               <b>{r.term.translation}</b>
               {r.term.note ? <span style={{ opacity: 0.8 }}> — {r.term.note}</span> : null}
+              {onInsert && insertHint ? <div style={{ opacity: 0.7, fontSize: 12 }}>{insertHint}</div> : null}
             </span>
           }
         >
-          <span className="hl-term">{seg}</span>
+          <span className={cls('hl-term')} {...click(r.term.translation)}>
+            {seg}
+          </span>
         </Tooltip>,
       );
     } else {
-      out.push(
-        <span key={i} className="hl-code">
+      const code = (
+        <span key={i} className={cls('hl-code')} {...click(seg)}>
           {seg}
-        </span>,
+        </span>
+      );
+      out.push(
+        onInsert && insertHint ? (
+          <Tooltip key={i} title={insertHint} mouseEnterDelay={0.6}>
+            {code}
+          </Tooltip>
+        ) : (
+          code
+        ),
       );
     }
     pos = r.end;

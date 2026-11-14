@@ -44,7 +44,7 @@ type Source = readonly [string, () => Promise<Uint8Array>];
 
 const PREVIEW_ITEMS = 100;
 
-const EXISTING_SELECT = { id: true, key: true, original: true, translation: true, stage: true, contextData: true, category: true, danger: true, sortOrder: true } as const;
+const EXISTING_SELECT = { id: true, key: true, original: true, translation: true, stage: true, contextData: true, category: true, danger: true, sortOrder: true, branch: true } as const;
 type ExistingEntry = Prisma.EntryGetPayload<{ select: typeof EXISTING_SELECT }>;
 
 interface MetaRow {
@@ -55,6 +55,8 @@ interface MetaRow {
   category: string;
   danger: boolean;
   key: string;
+  /** 分支路径 JSON；空字符串表示没有 */
+  branch: string;
 }
 
 /** 合并方案：由新旧词条计算得出，预览与实际导入共用 */
@@ -89,7 +91,7 @@ export class ParseService {
       for (const [i, [path, load]] of sources.entries()) {
         try {
           const data = await load();
-          const r = preview ? await this.previewFile(project, path, data) : await this.importFile(project, path, data, job.createdById, !!payload.reextract);
+          const r = preview ? await this.previewFile(project, path, data) : await this.importFile(project, path, data, job.createdById, !!payload.reextract, job.id);
           if (r) result.files.push(r);
           else result.skipped.push({ name: path, code: 'NO_TEXT' });
         } catch (e) {
@@ -190,7 +192,7 @@ export class ParseService {
    * 保存原文件并合并词条；没有文本的新文件返回 null。
    * 文件内容未变时跳过，除非 reextract（提取规则更新后重新合并）。
    */
-  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false): Promise<FileImportResult | null> {
+  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false, batchId: string | null = null): Promise<FileImportResult | null> {
     const { kind, entries, warnings } = extractEntries(path, data, project.engine as Engine);
     const existing = await this.prisma.file.findUnique({ where: { projectId_path: { projectId: project.id, path } } });
     if (!existing && !entries.length) return null;
@@ -198,7 +200,7 @@ export class ParseService {
     if (existing?.sha256 === sha256) {
       if (!reextract) return { path, status: 'unchanged', total: entries.length, added: 0, changed: 0, removed: 0 };
       await this.prisma.file.update({ where: { id: existing.id }, data: { kind, warnings: json(warnings) } });
-      const stats = await this.mergeEntries(project.id, existing.id, entries, userId);
+      const stats = await this.mergeEntries(project.id, existing.id, entries, userId, batchId);
       const touched = stats.added + stats.changed + stats.removed > 0;
       return { path, status: touched ? 'updated' : 'unchanged', total: entries.length, ...stats };
     }
@@ -209,7 +211,7 @@ export class ParseService {
     const file = existing
       ? await this.prisma.file.update({ where: { id: existing.id }, data: fileData })
       : await this.prisma.file.create({ data: { projectId: project.id, path, ...fileData } });
-    const stats = await this.mergeEntries(project.id, file.id, entries, userId);
+    const stats = await this.mergeEntries(project.id, file.id, entries, userId, batchId);
     if (existing && existing.storageKey !== storageKey && !(await this.prisma.file.count({ where: { storageKey: existing.storageKey } }))) {
       await this.storage.remove(existing.storageKey);
     }
@@ -240,6 +242,7 @@ export class ParseService {
       category: e.category,
       danger: e.danger,
       key: e.key,
+      branch: e.branch?.length ? JSON.stringify(e.branch) : '',
     });
 
     extracted.forEach((e, order) => {
@@ -251,7 +254,8 @@ export class ParseService {
         plan.sourceChanged.push({ id: ex.id, key: e.key, original: e.original, oldOriginal: ex.original, translation: ex.translation, stage });
       }
       const contextChanged = JSON.stringify(ex.contextData) !== JSON.stringify(e.context);
-      if (ex.sortOrder !== order || contextChanged || ex.category !== e.category || ex.danger !== e.danger) plan.meta.push(metaOf(ex.id, e, order));
+      const branchChanged = JSON.stringify(ex.branch ?? null) !== JSON.stringify(e.branch?.length ? e.branch : null);
+      if (ex.sortOrder !== order || contextChanged || branchChanged || ex.category !== e.category || ex.danger !== e.danger) plan.meta.push(metaOf(ex.id, e, order));
     });
 
     const unusedByOriginal = new Map<string, ExistingEntry[]>();
@@ -272,7 +276,8 @@ export class ParseService {
     return plan;
   }
 
-  private async mergeEntries(projectId: string, fileId: string, extracted: ExtractedEntry[], userId: string | null) {
+  /** batchId：同一次解析任务的原文变更记录在历史记录页合并显示（使用任务 ID） */
+  private async mergeEntries(projectId: string, fileId: string, extracted: ExtractedEntry[], userId: string | null, batchId: string | null) {
     const { meta, sourceChanged, creates: planned, removed } = this.planMerge(await this.loadExisting(fileId), extracted);
     const removeIds = removed.map((r) => r.id);
     const creates: Prisma.EntryCreateManyInput[] = planned.map(({ e, order }) => ({
@@ -284,6 +289,7 @@ export class ParseService {
       contextSearch: contextSearchText(e.context),
       category: e.category,
       danger: e.danger,
+      ...(e.branch?.length ? { branch: json(e.branch) } : {}),
       stage: e.danger ? 'HIDDEN' : 'UNTRANSLATED',
       sortOrder: order,
     }));
@@ -294,7 +300,7 @@ export class ParseService {
         for (const part of chunk(meta, 5000)) {
           await tx.$executeRaw`
             UPDATE "Entry" AS e
-            SET "sortOrder" = v.o, "contextData" = v.c::jsonb, "contextSearch" = v.s, "category" = v.cat, "danger" = v.d, "key" = v.k
+            SET "sortOrder" = v.o, "contextData" = v.c::jsonb, "contextSearch" = v.s, "category" = v.cat, "danger" = v.d, "key" = v.k, "branch" = NULLIF(v.b, '')::jsonb
             FROM (
               SELECT unnest(${part.map((m) => m.id)}::text[]) AS id,
                      unnest(${part.map((m) => m.sortOrder)}::int[]) AS o,
@@ -302,7 +308,8 @@ export class ParseService {
                      unnest(${part.map((m) => m.search)}::text[]) AS s,
                      unnest(${part.map((m) => m.category)}::text[]) AS cat,
                      unnest(${part.map((m) => m.danger)}::boolean[]) AS d,
-                     unnest(${part.map((m) => m.key)}::text[]) AS k
+                     unnest(${part.map((m) => m.key)}::text[]) AS k,
+                     unnest(${part.map((m) => m.branch)}::text[]) AS b
             ) AS v
             WHERE e.id = v.id`;
         }
@@ -311,7 +318,7 @@ export class ParseService {
         }
         for (const part of chunk(sourceChanged, 2000)) {
           await tx.entryHistory.createMany({
-            data: part.map((s) => ({ entryId: s.id, projectId, userId, action: 'SOURCE_CHANGED', translation: s.translation, stage: s.stage, note: s.oldOriginal })),
+            data: part.map((s) => ({ entryId: s.id, projectId, userId, action: 'SOURCE_CHANGED', translation: s.translation, stage: s.stage, note: s.oldOriginal, batchId })),
           });
         }
         for (const part of chunk(creates, 2000)) await tx.entry.createMany({ data: part });

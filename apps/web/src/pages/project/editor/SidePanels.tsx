@@ -9,6 +9,7 @@ import { useT } from '../../../i18n';
 import { contextText, historyNote } from '../../../i18n/format';
 import { formatTime, fromNow } from '../../../utils';
 import { CodesOnly } from './highlight';
+import { SceneView, useScene } from './SceneView';
 
 const Loading = () => (
   <div className="center-spin small">
@@ -132,12 +133,16 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
 
 export function ContextTab({ pid, entry, onJump }: { pid: string; entry: Entry; onJump: (id: string) => void }) {
   const t = useT();
+  const scene = useScene(pid, entry.id);
+  // 不在事件中的词条（数据库字段等）退回到前后相邻
   const q = useQuery({
     queryKey: ['neighbors', entry.id],
     queryFn: () => api<{ before: Neighbor[]; after: Neighbor[] }>(`/projects/${pid}/entries/${entry.id}/neighbors`),
     staleTime: 30_000,
+    enabled: !!scene.data && !scene.data.scene,
   });
-  if (q.isLoading) return <Loading />;
+  if (scene.isLoading || (scene.data && !scene.data.scene && q.isLoading)) return <Loading />;
+  if (scene.data?.scene) return <SceneView data={scene.data} onJump={onJump} />;
   const row = (n: Pick<Neighbor, 'id' | 'original' | 'translation' | 'stage'>, current = false) => (
     <div key={n.id} className={`ctx-row${current ? ' current' : ''}`} onClick={() => !current && onJump(n.id)}>
       <StageDot stage={n.stage} />
@@ -197,6 +202,7 @@ export function HistoryTab({ pid, entry, canEdit, onRollback }: { pid: string; e
               <b>{h.user?.displayName ?? t('common.system')}</b>
               <Tag bordered={false}>{hasMessage(`history.${h.action}`) ? t(`history.${h.action}`) : h.action}</Tag>
               {(h.action === 'BATCH' || h.action === 'REPLACE') && h.note && <span className="muted small">{historyNote(h.action, h.note, t)}</span>}
+              {(h.action === 'TRANSLATE' || h.action === 'STAGE') && h.note && <span className="muted small">{t('history.noteLabel')}{h.note}</span>}
               <StageTag stage={h.stage} />
               <Tooltip title={formatTime(h.createdAt)}>
                 <span className="muted small">{fromNow(h.createdAt)}</span>

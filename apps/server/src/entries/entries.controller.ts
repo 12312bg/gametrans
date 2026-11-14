@@ -2,9 +2,9 @@ import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { PERMISSIONS } from '@gametrans/shared';
 import { ApiConflictResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AccessService } from '../common/access.service';
-import { AuthUser, CurrentUser, Public } from '../common/decorators';
+import { AuthUser, CurrentUser, Public, ReadOnlyPost } from '../common/decorators';
 import { T, Translator } from '../common/locale';
-import { BatchDto, FillDto, ReplaceDto, RollbackDto, UpdateEntryDto } from './entries.dto';
+import { BatchDto, BulkSaveDto, FillDto, ReplaceDto, RollbackDto, TmLookupDto, UpdateEntryDto } from './entries.dto';
 import { EntriesService, EntryFilter, withContextText } from './entries.service';
 import { EntryModel, PagedEntriesModel } from '../common/api.models';
 
@@ -58,6 +58,19 @@ export class EntriesController {
     return this.entries.position(pid, eid, query);
   }
 
+  @ApiOperation({
+    summary: '整段事件（场景上下文）',
+    description:
+      '与该词条同一事件页 / 公共事件 / 敌群页的全部词条（最多 2000 条），按指令顺序排列。每条带 `id`、`version`、说话人 `speaker`（姓名框 / 脸图）、' +
+      '分支路径 `branch`（由外到内：选项 choice、取消 cancel、条件分支 if / 否则 else、战斗结果 battle、循环 loop；旧数据需在文件页「重新提取」后才有）。不在事件中的词条返回 `scene: null`。',
+  })
+  @Public()
+  @Get('entries/:eid/scene')
+  async scene(@CurrentUser() user: AuthUser | undefined, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string) {
+    await this.access.require(user, pid, PERMISSIONS.VIEW);
+    return this.entries.scene(pid, eid, t);
+  }
+
   @ApiOperation({ summary: '前后相邻词条', description: '同一文件中前后各 3 条，用于理解上下文。' })
   @Public()
   @Get('entries/:eid/neighbors')
@@ -73,6 +86,19 @@ export class EntriesController {
   async update(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: UpdateEntryDto) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
     return withContextText(await this.entries.update(ctx, eid, dto), t);
+  }
+
+  @ApiOperation({
+    summary: '批量保存译文',
+    description:
+      '一次最多 500 条 `{id, version, translation, stage?, note?}`，逐条独立处理、互不影响，逐条返回 `status`：`saved` / `unchanged` / `conflict`（版本不一致，`entry` 为当前内容）/ `rejected`（严格模式下缺少控制符）/ `error`。' +
+      '每条附带控制符检查 `warnings`（缺失 / 多出的控制符与 `%1` 占位符、标签，以及原文控制符本身的问题 `sourceIssues`），只提示不拦截；`strict: true` 时缺少控制符且没有 `note` 的词条不写入。' +
+      '`note` 会写入修改历史。同一次请求在历史记录中合并为一组。',
+  })
+  @Post('entries/bulk-save')
+  async bulkSave(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Body() dto: BulkSaveDto) {
+    const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
+    return this.entries.bulkSave(ctx, dto.items, dto.strict, t);
   }
 
   @ApiOperation({ summary: '批量操作', description: '按 ids 或筛选条件（filter，字段同词条列表）批量审核、锁定、隐藏等；不符合条件的词条会被跳过。' })
@@ -131,6 +157,19 @@ export class EntriesController {
   async suggestions(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string, @Param('eid') eid: string) {
     await this.access.require(user, pid, PERMISSIONS.VIEW);
     return this.entries.suggestions(pid, eid);
+  }
+
+  @ApiOperation({
+    summary: '批量精确匹配已有译文',
+    description:
+      '提交最多 500 条原文，返回项目内原文完全相同的已有译文。同一原文有多种译法时全部返回（已审核优先、使用次数多优先），附带审核状态统计与最多 5 个来源。不修改数据，只读令牌也可调用。',
+  })
+  @Public()
+  @ReadOnlyPost()
+  @Post('tm/lookup')
+  async lookup(@CurrentUser() user: AuthUser | undefined, @Param('pid') pid: string, @Body() dto: TmLookupDto) {
+    await this.access.require(user, pid, PERMISSIONS.VIEW);
+    return this.entries.lookup(pid, dto.texts, dto.includeQuestioned);
   }
 
   @ApiOperation({ summary: '翻译记忆批量填充', description: '把原文完全相同的已有译文填入未翻译词条，需要审核员及以上。' })

@@ -38,6 +38,11 @@ export class RollbackDto {
   @IsInt() version: number;
 }
 
+export class PropagateDto {
+  /** 是否也覆盖已有不同译文的词条 */
+  @IsOptional() @IsBoolean() overwrite?: boolean;
+}
+
 export class FillDto {
   /** 只填充该文件；不填表示整个项目 */
   @IsOptional() @IsString() fileId?: string;

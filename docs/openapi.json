@@ -2283,7 +2283,7 @@
       "put": {
         "operationId": "EntriesController_update",
         "summary": "保存译文 / 修改状态",
-        "description": "必须带上当前 `version`；若已被他人修改返回 409，响应中的 `current` 为最新词条。不传 `stage` 时自动推断（有译文 → 已翻译）。",
+        "description": "必须带上当前 `version`；若已被他人修改返回 409，响应中的 `current` 为最新词条。不传 `stage` 时自动推断（有译文 → 已翻译）。带 `?identical=1` 时响应附带 `identical`：原文完全相同、当前用户可修改的其他词条数（fill 未翻译 / sameText 仅状态不同 / differ 已有不同译文 / skipped 无权修改），用于询问是否批量执行。",
         "parameters": [
           {
             "name": "pid",
@@ -2297,6 +2297,14 @@
             "name": "eid",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "identical",
+            "required": false,
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -2437,6 +2445,49 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "词条"
+        ]
+      }
+    },
+    "/api/projects/{pid}/entries/{eid}/propagate": {
+      "post": {
+        "operationId": "EntriesController_propagate",
+        "summary": "应用到原文相同的词条",
+        "description": "把该词条当前的译文与状态应用到原文完全相同的其他词条（不含已隐藏、跳过无权修改的）。默认只改未翻译的和仅状态不同的，`overwrite: true` 时也覆盖已有不同译文的。返回 `previous`：每条修改前的译文、状态与修改后的版本，可用批量保存接口撤销。历史记录中合并为一组。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PropagateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -4411,6 +4462,15 @@
           "translation",
           "version"
         ]
+      },
+      "PropagateDto": {
+        "type": "object",
+        "properties": {
+          "overwrite": {
+            "type": "boolean",
+            "description": "是否也覆盖已有不同译文的词条"
+          }
+        }
       },
       "BulkSaveItemDto": {
         "type": "object",

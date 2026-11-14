@@ -9,6 +9,7 @@ import {
   SaveOutlined,
   SyncOutlined,
   TeamOutlined,
+  UndoOutlined,
   UnlockOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -277,6 +278,13 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
               <Tag color="orange" bordered={false}>
                 {t('entry.unsaved')}
               </Tag>
+            )}
+            {dirty && (
+              <Tooltip title={t('entry.revertTip')}>
+                <Button size="small" type="link" icon={<UndoOutlined />} className="revert-btn" onClick={props.onDiscardDraft}>
+                  {t('entry.revert')}
+                </Button>
+              </Tooltip>
             )}
           </span>
           <span className="muted small">{t('entry.chars', { count: draft.length })}</span>

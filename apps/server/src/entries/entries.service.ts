@@ -491,6 +491,78 @@ export class EntriesService {
     });
   }
 
+  /**
+   * 原文完全相同（不含已隐藏）且译文或状态与该词条不同的其他词条，按当前用户能否修改分类计数：
+   * fill 未翻译、sameText 译文相同仅状态不同、differ 已有不同译文；skipped 为无权修改的。
+   */
+  private async identicalTargets(ctx: ProjectContext, src: { id: string; original: string; translation: string; stage: string }) {
+    const to = src.stage as Stage;
+    const rows = await this.prisma.entry.findMany({
+      where: { projectId: ctx.project.id, original: src.original, id: { not: src.id }, stage: { not: 'HIDDEN' } },
+      select: { id: true, translation: true, stage: true, version: true },
+      take: MAX_BATCH,
+    });
+    const pending = rows.filter((x) => x.translation !== src.translation || x.stage !== to);
+    const allowed = pending.filter((x) => {
+      const from = x.stage as Stage;
+      const tp = permissionForTransition(from, to);
+      return can(ctx, permissionToEdit(from)) && (!tp || can(ctx, tp));
+    });
+    const kind = (x: { translation: string }) => (x.translation === '' ? 'fill' : x.translation === src.translation ? 'sameText' : 'differ');
+    return { allowed, kind, skipped: pending.length - allowed.length };
+  }
+
+  /** 保存后用于询问「是否对相同原文批量执行」的计数；源词条没有译文时不询问 */
+  async identicalSummary(ctx: ProjectContext, id: string) {
+    const src = await this.prisma.entry.findFirst({ where: { id, projectId: ctx.project.id }, select: { id: true, original: true, translation: true, stage: true } });
+    if (!src || !src.translation || src.stage === 'HIDDEN') return { fill: 0, sameText: 0, differ: 0, skipped: 0 };
+    const { allowed, kind, skipped } = await this.identicalTargets(ctx, src);
+    const count = (k: string) => allowed.filter((x) => kind(x) === k).length;
+    return { fill: count('fill'), sameText: count('sameText'), differ: count('differ'), skipped };
+  }
+
+  /**
+   * 把该词条的译文与状态应用到原文完全相同的其他词条。默认只改未翻译的和译文相同仅状态不同的，
+   * overwrite 时也覆盖已有不同译文的。返回每条修改前的内容与修改后的版本，便于撤销。
+   */
+  async propagate(ctx: ProjectContext, id: string, overwrite = false) {
+    const projectId = ctx.project.id;
+    const userId = ctx.user!.id;
+    const src = await this.prisma.entry.findFirst({ where: { id, projectId }, select: { id: true, original: true, translation: true, stage: true } });
+    if (!src) throw fail('ENTRY_NOT_FOUND');
+    if (!src.translation || src.stage === 'HIDDEN') return { affected: 0, skipped: 0, batchId: null, previous: [] };
+    const { allowed, kind, skipped } = await this.identicalTargets(ctx, src);
+    const targets = allowed.filter((x) => overwrite || kind(x) !== 'differ');
+    const to = src.stage as Stage;
+    const batchId = randomUUID();
+    const previous: { id: string; translation: string; stage: Stage; version: number }[] = [];
+    const before = new Map(targets.map((x) => [x.id, x]));
+    for (const part of chunk(targets, 2000)) {
+      // 版本号不一致说明期间被他人修改，跳过
+      const updated = await this.prisma.$queryRaw<{ id: string; version: number }[]>`
+        UPDATE "Entry" AS e
+        SET "translation" = ${src.translation}, "stage" = ${to}::"Stage", "version" = e."version" + 1, "updatedAt" = now(),
+            "translatorId" = CASE WHEN e."translation" = ${src.translation} THEN e."translatorId" ELSE ${userId} END,
+            "reviewerId" = CASE WHEN ${to} = 'REVIEWED' THEN ${userId} WHEN ${to} = 'LOCKED' THEN e."reviewerId" ELSE NULL END
+        FROM (SELECT unnest(${part.map((x) => x.id)}::text[]) AS id, unnest(${part.map((x) => x.version)}::int[]) AS ver) AS v
+        WHERE e.id = v.id AND e."version" = v.ver
+        RETURNING e.id, e.version`;
+      for (const u of updated) {
+        const b = before.get(u.id)!;
+        previous.push({ id: u.id, translation: b.translation, stage: b.stage as Stage, version: u.version });
+      }
+      await this.prisma.entryHistory.createMany({
+        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'SYNC', translation: src.translation, stage: to, batchId })),
+      });
+    }
+    if (previous.length) {
+      const text = src.original.length > 30 ? `${src.original.slice(0, 30)}…` : src.original;
+      await this.activity.log(projectId, userId, 'entries.sync', { text, count: previous.length });
+      this.rt.entries(projectId, ctx.user, previous.length);
+    }
+    return { affected: previous.length, skipped: skipped + (targets.length - previous.length), batchId: previous.length ? batchId : null, previous };
+  }
+
   /** 把该词条的译文与状态复制到原文相同的脚本 / 插件字符串；无权修改的跳过 */
   async syncLinked(ctx: ProjectContext, id: string) {
     const projectId = ctx.project.id;

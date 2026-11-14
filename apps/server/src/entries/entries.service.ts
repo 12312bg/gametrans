@@ -23,6 +23,7 @@ import { fail } from '../common/errors';
 import type { Translator } from '../common/locale';
 import { chunk, escapeLike, pageParams } from '../common/query';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 export interface EntryFilter {
   fileId?: string;
@@ -79,6 +80,7 @@ export class EntriesService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly activity: ActivityService,
+    private readonly rt: RealtimeService,
   ) {}
 
   buildWhere(projectId: string, raw: EntryFilter): Prisma.EntryWhereInput {
@@ -218,7 +220,9 @@ export class EntriesService {
     await this.prisma.entryHistory.create({
       data: { entryId: id, projectId, userId, action: changed ? 'TRANSLATE' : 'STAGE', translation, stage: next },
     });
-    return this.get(projectId, id);
+    const updated = await this.get(projectId, id);
+    this.rt.entry(projectId, ctx.user, updated);
+    return updated;
   }
 
   async history(projectId: string, id: string) {
@@ -266,7 +270,9 @@ export class EntriesService {
         note: h.createdAt.toISOString(),
       },
     });
-    return this.get(ctx.project.id, id);
+    const updated = await this.get(ctx.project.id, id);
+    this.rt.entry(ctx.project.id, ctx.user, updated);
+    return updated;
   }
 
   async batch(ctx: ProjectContext, action: BatchAction, ids: string[] | undefined, filter: EntryFilter | undefined) {
@@ -324,6 +330,7 @@ export class EntriesService {
     }
     if (rows.length) {
       await this.activity.log(projectId, userId, 'entries.batch', { action, count: rows.length });
+      this.rt.entries(projectId, ctx.user, rows.length);
     }
     return { affected: rows.length };
   }
@@ -371,6 +378,7 @@ export class EntriesService {
       ]);
       const text = src.original.length > 30 ? `${src.original.slice(0, 30)}…` : src.original;
       await this.activity.log(projectId, userId, 'entries.sync', { text, count: ids.length });
+      this.rt.entries(projectId, ctx.user, ids.length);
     }
     return { affected: allowed.length, skipped: pending.length - allowed.length };
   }
@@ -436,6 +444,7 @@ export class EntriesService {
     if (affected) {
       const short = (s: string) => (s.length > 30 ? `${s.slice(0, 30)}…` : s);
       await this.activity.log(projectId, userId, 'entries.replace', { find: short(o.find), replace: short(o.replace), count: affected });
+      this.rt.entries(projectId, ctx.user, affected);
     }
     return { affected, skipped: skipped + (changes.length - affected), occurrences };
   }
@@ -489,7 +498,10 @@ export class EntriesService {
         data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const })),
       });
     }
-    if (updated.length) await this.activity.log(projectId, userId, 'tm.fill', { count: updated.length });
+    if (updated.length) {
+      await this.activity.log(projectId, userId, 'tm.fill', { count: updated.length });
+      this.rt.entries(projectId, ctx.user, updated.length);
+    }
     return { affected: updated.length };
   }
 }

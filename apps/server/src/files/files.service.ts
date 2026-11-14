@@ -7,6 +7,7 @@ import { fail } from '../common/errors';
 import { emptyCounts, stageCounts } from '../common/stats';
 import { StorageService } from '../common/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class FilesService {
@@ -14,6 +15,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly activity: ActivityService,
+    private readonly rt: RealtimeService,
   ) {}
 
   async list(pid: string) {
@@ -35,6 +37,7 @@ export class FilesService {
     await this.prisma.file.delete({ where: { id: fid } });
     if (!(await this.prisma.file.count({ where: { storageKey: file.storageKey } }))) await this.storage.remove(file.storageKey);
     await this.activity.log(pid, userId, 'file.delete', { path: file.path });
+    this.rt.publish(pid, { type: 'files', by: null });
   }
 
   /** 预编辑：编辑器中显示的原文件与预编辑后的内容（易读格式） */

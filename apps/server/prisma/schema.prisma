@@ -85,6 +85,7 @@ model User {
   translatedEntries Entry[]         @relation("EntryTranslator")
   reviewedEntries   Entry[]         @relation("EntryReviewer")
   terms             Term[]
+  termHistory       TermHistory[]
   jobs              Job[]
   activities        Activity[]
   apiTokens         ApiToken[]
@@ -115,6 +116,7 @@ model Project {
   jobs         Job[]
   activities   Activity[]
   history      EntryHistory[]
+  termHistory  TermHistory[]
   apiTokens    ApiToken[]
   attachments  Attachment[]
 
@@ -290,6 +292,30 @@ model Term {
   createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([projectId, term])
+}
+
+/// 术语表修改记录；术语删除后记录仍保留
+model TermHistory {
+  id        String   @id @default(cuid())
+  projectId String
+  /// 术语删除后仍保留 id，不建外键
+  termId    String
+  userId    String?
+  /// CREATE / UPDATE / DELETE / IMPORT
+  action    String
+  /// 修改后的术语原文（删除时为删除前的）
+  term      String
+  /// 修改前的内容 { term, translation, note, caseSensitive }；新建时为空
+  before    Json?
+  /// 修改后的内容；删除时为空
+  after     Json?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, userId])
 }
 
 model Job {

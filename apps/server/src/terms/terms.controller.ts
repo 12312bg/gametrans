@@ -30,21 +30,21 @@ export class TermsController {
   @Post()
   async create(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: TermDto) {
     await this.manage(user, pid);
-    return this.terms.create(pid, user.id, dto);
+    return this.terms.create(pid, user, dto);
   }
 
   @ApiOperation({ summary: '修改术语' })
   @Patch(':tid')
   async update(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('tid') tid: string, @Body() dto: UpdateTermDto) {
     await this.manage(user, pid);
-    return this.terms.update(pid, tid, dto);
+    return this.terms.update(pid, user, tid, dto);
   }
 
   @ApiOperation({ summary: '删除术语' })
   @Delete(':tid')
   async remove(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('tid') tid: string) {
     await this.manage(user, pid);
-    await this.terms.remove(pid, tid);
+    await this.terms.remove(pid, user, tid);
     return { ok: true };
   }
 
@@ -52,6 +52,6 @@ export class TermsController {
   @Post('import')
   async import(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Body() dto: ImportTermsDto) {
     await this.manage(user, pid);
-    return this.terms.import(pid, user.id, dto.text, dto.overwrite);
+    return this.terms.import(pid, user, dto.text, dto.overwrite);
   }
 }

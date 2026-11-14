@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, api, qs } from '../../../api/client';
 import { useProject } from '../../../api/project';
+import { useEditors, useRealtime } from '../../../api/realtime';
 import type { Entry, FileItem, HistoryItem, Paged, Suggestion, Term } from '../../../api/types';
 import { useT } from '../../../i18n';
 import { errorMessage } from '../../../utils';
@@ -46,6 +47,10 @@ export default function EditorPage() {
   const pageSize = PAGE_SIZES.includes(sizeParam) ? sizeParam : savedPageSize();
   const selectedId = params.get('entry');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  /** 开始编辑草稿时词条的版本：他人随后修改时保存会提示冲突，而不是静默覆盖 */
+  const bases = useRef<Record<string, number>>({});
+  const { remote, focus } = useRealtime();
+  const editors = useEditors();
   const [sideTab, setSideTab] = useState('tm');
   const [batchMode, setBatchMode] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -130,12 +135,22 @@ export default function EditorPage() {
   }, [hasDirty]);
 
   const draftOf = (e: Entry) => drafts[e.id] ?? e.translation;
-  const setDraft = (id: string, v: string) => setDrafts((d) => ({ ...d, [id]: v }));
+  const setDraft = (id: string, v: string) => {
+    if (bases.current[id] === undefined) {
+      const e = items.find((x) => x.id === id) ?? (current?.id === id ? current : undefined);
+      if (e) bases.current[id] = e.version;
+    }
+    setDrafts((d) => ({ ...d, [id]: v }));
+  };
+  const dropDraft = (id: string) => {
+    delete bases.current[id];
+    setDrafts(({ [id]: _, ...rest }) => rest);
+  };
 
   const applyUpdated = (updated: Entry) => {
     qc.setQueryData<Paged<Entry>>(listKey, (old) => (old ? { ...old, items: old.items.map((i) => (i.id === updated.id ? updated : i)) } : old));
     qc.setQueryData(['entry', pid, updated.id], updated);
-    setDrafts(({ [updated.id]: _, ...rest }) => rest);
+    dropDraft(updated.id);
     for (const key of ['project', 'stats', 'files']) qc.invalidateQueries({ queryKey: [key, pid], refetchType: 'none' });
   };
 
@@ -171,7 +186,7 @@ export default function EditorPage() {
       return;
     }
     try {
-      applyUpdated(await saveMut.mutateAsync({ id: entry.id, translation, stage: opts.stage, version: version ?? entry.version }));
+      applyUpdated(await saveMut.mutateAsync({ id: entry.id, translation, stage: opts.stage, version: version ?? bases.current[entry.id] ?? entry.version }));
       if (opts.next) move(1);
     } catch (e) {
       const theirs = e instanceof ApiError && e.code === 'ENTRY_CONFLICT' ? (e.data as { current?: Entry }).current : undefined;
@@ -223,6 +238,20 @@ export default function EditorPage() {
   };
 
   const editable = !!current && has(PERMISSIONS.TRANSLATE) && canEditStage(current.stage);
+
+  // 上报正在编辑的词条，供其他成员看到
+  const focusId = editable ? current.id : null;
+  useEffect(() => focus(focusId), [focus, focusId]);
+  useEffect(() => () => focus(null), [focus]);
+
+  // 他人修改了我正在编辑的词条：草稿与新译文相同则直接丢弃，否则提示
+  const base = current ? bases.current[current.id] : undefined;
+  const stale = !!current && drafts[current.id] !== undefined && base !== undefined && base !== current.version;
+  useEffect(() => {
+    if (stale && current && drafts[current.id] === current.translation) dropDraft(current.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stale, current?.translation]);
+  const staleInfo = stale && current ? { by: remote[current.id]?.by ?? current.translator ?? null } : null;
   useShortcuts({
     current,
     editable,
@@ -314,6 +343,8 @@ export default function EditorPage() {
           selectedId={selectedId}
           onSelect={select}
           drafts={drafts}
+          editors={editors}
+          remote={remote}
           batchMode={batchMode}
           checked={checked}
           onChecked={setChecked}
@@ -338,6 +369,13 @@ export default function EditorPage() {
               onFile={() => void jumpToFile(current)}
               sideTab={sideTab}
               onSideTab={setSideTab}
+              editors={editors.get(current.id) ?? []}
+              stale={staleInfo}
+              onDiscardDraft={() => dropDraft(current.id)}
+              onKeepDraft={() => {
+                bases.current[current.id] = current.version;
+                setDrafts((d) => ({ ...d }));
+              }}
             />
           ) : selectedId && single.isLoading ? (
             <div className="center-spin">

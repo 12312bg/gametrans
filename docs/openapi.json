@@ -1,6 +1,66 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/projects/{pid}/events": {
+      "get": {
+        "operationId": "RealtimeController_events",
+        "summary": "项目事件流（SSE）",
+        "description": "`text/event-stream`，每条 `data:` 为一个 JSON 事件：`hello`（连接 ID）、`entry`（单条词条变化）、`entries`（批量变化，需重新加载）、`terms`、`files`、`presence`（在线成员与正在编辑的词条）。公开项目无需登录。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "实时推送"
+        ]
+      }
+    },
+    "/api/projects/{pid}/presence": {
+      "post": {
+        "operationId": "RealtimeController_focus",
+        "summary": "上报正在编辑的词条",
+        "description": "`connId` 来自事件流的 `hello` 事件。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FocusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "实时推送"
+        ]
+      }
+    },
     "/api/auth/config": {
       "get": {
         "operationId": "AuthController_siteConfig",
@@ -2843,6 +2903,72 @@
         ]
       }
     },
+    "/api/projects/{pid}/history": {
+      "get": {
+        "operationId": "HistoryController_list",
+        "summary": "项目历史记录",
+        "description": "词条与术语的修改记录，按时间倒序。词条记录带有上一版本的译文与状态（`prevTranslation` / `prevStage`，首条记录为 null）用于对比；原文变更记录带有 `oldOriginal` / `newOriginal`。公开项目无需登录。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "不传为全部",
+            "schema": {
+              "enum": [
+                "translate",
+                "review",
+                "import",
+                "term"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "历史记录"
+        ]
+      }
+    },
     "/api/projects/{pid}/exports": {
       "post": {
         "operationId": "ExportsController_create",
@@ -3042,6 +3168,10 @@
       }
     },
     "schemas": {
+      "FocusDto": {
+        "type": "object",
+        "properties": {}
+      },
       "RegisterDto": {
         "type": "object",
         "properties": {

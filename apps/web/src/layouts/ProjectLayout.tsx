@@ -1,4 +1,4 @@
-import { AppstoreOutlined, BookOutlined, CloudDownloadOutlined, FileTextOutlined, HistoryOutlined, PaperClipOutlined, SettingOutlined, TeamOutlined, TranslationOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BookOutlined, CloudDownloadOutlined, FieldTimeOutlined, FileTextOutlined, HistoryOutlined, PaperClipOutlined, SettingOutlined, TeamOutlined, TranslationOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App, Badge, Button, Input, Menu, Modal, Result, Skeleton, Space, Typography } from 'antd';
 import { PERMISSIONS } from '@gametrans/shared';
@@ -6,6 +6,8 @@ import { useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import { makeOutlet, useProjectQuery } from '../api/project';
+import { RealtimeProvider } from '../api/realtime';
+import { OnlineMembers } from '../components/OnlineMembers';
 import { EngineTag, LangPair, RoleTag, VisibilityTag } from '../components/Tags';
 import { useT } from '../i18n';
 import { useAuth } from '../providers/AuthProvider';
@@ -79,7 +81,8 @@ export function ProjectLayout() {
       ),
     },
     ...(outlet.has(PERMISSIONS.DOWNLOAD_EXPORT) ? [{ key: 'exports', icon: <CloudDownloadOutlined />, label: t('project.tab.exports') }] : []),
-    { key: 'activity', icon: <HistoryOutlined />, label: t('project.tab.activity') },
+    { key: 'history', icon: <HistoryOutlined />, label: t('project.tab.history') },
+    { key: 'activity', icon: <FieldTimeOutlined />, label: t('project.tab.activity') },
     ...(outlet.has(PERMISSIONS.MANAGE_PROJECT) ? [{ key: 'settings', icon: <SettingOutlined />, label: t('project.tab.settings') }] : []),
   ];
 
@@ -103,6 +106,7 @@ export function ProjectLayout() {
   ) : null;
 
   return (
+    <RealtimeProvider pid={p.id}>
     <div className={`project-shell${isEditor ? ' editor-mode' : ''}`}>
       <div className="project-header">
         <div className="project-header-inner">
@@ -118,7 +122,10 @@ export function ProjectLayout() {
                 {user?.isSuperAdmin && !p.myRole && <Typography.Text type="secondary">{t('project.superAdminView')}</Typography.Text>}
               </Space>
             </div>
-            <div className="project-actions">{joinArea}</div>
+            <div className="project-actions">
+              <OnlineMembers />
+              {joinArea}
+            </div>
           </div>
           <Menu mode="horizontal" className="project-menu" selectedKeys={[section]} items={items} onClick={({ key }) => nav(key ? `${base}/${key}` : base)} />
         </div>
@@ -138,5 +145,6 @@ export function ProjectLayout() {
         <Input.TextArea rows={4} maxLength={500} showCount value={joinMsg} onChange={(e) => setJoinMsg(e.target.value)} />
       </Modal>
     </div>
+    </RealtimeProvider>
   );
 }

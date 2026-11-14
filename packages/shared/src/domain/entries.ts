@@ -121,3 +121,82 @@ export function extractTags(text: string): string[] {
 export function missingTags(original: string, translation: string): string[] {
   return missingBy(extractTags(original), extractTags(translation), (t) => t.toLowerCase());
 }
+
+/** 带参数的数字型控制符：参数应为数字（\V[1]、\N[2]、\C[3]、\I[87]、MZ 的 \FS[24]、\PX[10] 等） */
+const NUMERIC_CODES = new Set(['V', 'N', 'P', 'C', 'I', 'FS', 'PX', 'PY']);
+
+/** 编号占位符：%1、%2 …（MV/MZ 的系统用语、部分插件文本） */
+const PLACEHOLDER_REGEX = /%\d+/g;
+
+export function extractPlaceholders(text: string): string[] {
+  return text.match(PLACEHOLDER_REGEX) ?? [];
+}
+
+export type SourceIssueKind = 'unclosedBracket' | 'badArgument' | 'emptyArgument' | 'fullWidth' | 'trailingBackslash';
+
+export interface SourceIssue {
+  kind: SourceIssueKind;
+  /** 有问题的片段 */
+  text: string;
+  index: number;
+}
+
+/**
+ * 原文中控制符本身的问题（与译文无关）：缺右括号、数字型控制符参数不是数字、
+ * 全角反斜杠 / 括号、行末孤立的反斜杠等。这类问题导致的「缺失」不应算作译者漏掉。
+ */
+export function sourceCodeIssues(text: string): SourceIssue[] {
+  const out: SourceIssue[] = [];
+  for (const m of text.matchAll(/\\([A-Za-z]+)\[([^\]\n]*)(\]?)/g)) {
+    const [whole, name, arg, close] = m;
+    if (!close) out.push({ kind: 'unclosedBracket', text: whole.split(/\s/)[0], index: m.index! });
+    else if (arg.trim() === '') out.push({ kind: 'emptyArgument', text: whole, index: m.index! });
+    else if (NUMERIC_CODES.has(name.toUpperCase()) && !/^\d+$/.test(arg.trim())) out.push({ kind: 'badArgument', text: whole, index: m.index! });
+  }
+  for (const m of text.matchAll(/[＼][A-Za-z]+|\\[A-Za-z]+[［【][^］】\n]*[］】]?/g)) out.push({ kind: 'fullWidth', text: m[0], index: m.index! });
+  for (const m of text.matchAll(/\\(?=\s*$)/gm)) out.push({ kind: 'trailingBackslash', text: '\\', index: m.index! });
+  return out.sort((a, b) => a.index - b.index);
+}
+
+export interface MarkupReport {
+  /** 原文中有、译文缺失（或数量不足）的控制符 */
+  missingCodes: string[];
+  /** 译文中多出来的控制符（可能是笔误） */
+  extraCodes: string[];
+  missingPlaceholders: string[];
+  extraPlaceholders: string[];
+  /** 插件标签，仅备注 / 注释类词条检查 */
+  missingTags: string[];
+  /** 原文控制符本身的问题 */
+  sourceIssues: SourceIssue[];
+}
+
+const TAGGED_CATEGORIES = new Set(['comment', 'note']);
+
+/**
+ * 译文的控制符 / 占位符 / 标签检查。只比较数量，不要求顺序一致（%1 %2 可按语序调整）。
+ * 译文为空时只报告原文问题。
+ */
+export function checkMarkup(original: string, translation: string, category?: string): MarkupReport {
+  const sourceIssues = sourceCodeIssues(original);
+  if (!translation) return { missingCodes: [], extraCodes: [], missingPlaceholders: [], extraPlaceholders: [], missingTags: [], sourceIssues };
+  const so = extractControlCodes(original);
+  const tr = extractControlCodes(translation);
+  const po = extractPlaceholders(original);
+  const pt = extractPlaceholders(translation);
+  return {
+    missingCodes: missingBy(so, tr, codeKey),
+    extraCodes: missingBy(tr, so, codeKey),
+    missingPlaceholders: missingBy(po, pt, (s) => s),
+    extraPlaceholders: missingBy(pt, po, (s) => s),
+    missingTags: category && TAGGED_CATEGORIES.has(category) ? missingTags(original, translation) : [],
+    sourceIssues,
+  };
+}
+
+/** 是否有「译文漏掉」类问题（严格模式据此拒绝写入） */
+export const hasMissingMarkup = (r: MarkupReport) => r.missingCodes.length + r.missingPlaceholders.length + r.missingTags.length > 0;
+
+/** 是否有任何需要提示的问题 */
+export const hasMarkupWarnings = (r: MarkupReport) =>
+  hasMissingMarkup(r) || r.extraCodes.length + r.extraPlaceholders.length + r.sourceIssues.length > 0;

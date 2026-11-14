@@ -236,6 +236,8 @@ model Entry {
   contextSearch String   @default("")
   category      String
   danger        Boolean  @default(false)
+  /// 事件指令中所在的分支 BranchStep[]（由外到内）；不在分支内或旧数据为空，重新提取后补齐
+  branch        Json?
   stage         Stage    @default(UNTRANSLATED)
   sortOrder     Int
   version       Int      @default(0)

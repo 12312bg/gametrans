@@ -1,4 +1,4 @@
-import type { ContextPart, EntryCategory, Engine, Issue, Params } from '@gametrans/shared';
+import type { BranchStep, ContextPart, EntryCategory, Engine, Issue, Params } from '@gametrans/shared';
 
 export interface ExtractedEntry {
   /** 文件内唯一且尽量稳定的键，如 events/1/pages/0/list/3 */
@@ -9,6 +9,8 @@ export interface ExtractedEntry {
   category: EntryCategory;
   /** 危险文本（脚本 / 插件 / 备注），默认隐藏 */
   danger: boolean;
+  /** 事件指令中所在的分支（由外到内）；不在分支内时省略 */
+  branch?: BranchStep[];
 }
 
 /** 提取与回写共用一次遍历：set() 把译文写回内存中的数据 */

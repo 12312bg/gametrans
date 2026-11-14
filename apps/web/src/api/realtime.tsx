@@ -35,7 +35,7 @@ function applyPatch(qc: QueryClient, pid: string, p: RtEntryPatch) {
   );
   qc.setQueryData<Entry>(['entry', pid, p.id], (old) => (old ? merge(old, p) : old));
   // 上下文、相同字符串里显示的译文
-  for (const key of ['neighbors', 'linked']) qc.invalidateQueries({ queryKey: [key] });
+  for (const key of ['neighbors', 'linked', 'scene']) qc.invalidateQueries({ queryKey: [key] });
 }
 
 /** 合并短时间内的多次失效，避免批量操作时反复请求 */
@@ -48,7 +48,7 @@ function useDebouncedInvalidate(qc: QueryClient, pid: string) {
       for (const k of keys) pending.current.add(k);
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => {
-        for (const k of pending.current) qc.invalidateQueries({ queryKey: k === 'history' ? [k] : [k, pid] });
+        for (const k of pending.current) qc.invalidateQueries({ queryKey: k === 'history' || k === 'scene' ? [k] : [k, pid] });
         pending.current.clear();
       }, 600);
     },
@@ -105,7 +105,7 @@ export function RealtimeProvider({ pid, children }: { pid: string; children: Rea
           break;
         case 'entries':
         case 'files':
-          invalidate('entries', 'entry', 'project', 'files', 'stats', 'history', 'project-history', 'activity');
+          invalidate('entries', 'entry', 'project', 'files', 'stats', 'history', 'scene', 'project-history', 'activity');
           break;
         case 'terms':
           invalidate('terms', 'project-history', 'activity');

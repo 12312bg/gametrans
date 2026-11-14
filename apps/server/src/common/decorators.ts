@@ -5,6 +5,10 @@ export const IS_PUBLIC = 'isPublic';
 /** 允许未登录访问（已登录时仍会解析用户） */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
+export const READ_ONLY_POST = 'readOnlyPost';
+/** 用 POST 传参但不修改数据的查询接口：只读令牌也可以调用 */
+export const ReadOnlyPost = () => SetMetadata(READ_ONLY_POST, true);
+
 export const SESSION_ONLY = 'sessionOnly';
 /** 只允许网页登录访问，禁止 API 令牌（管理令牌、修改密码与资料） */
 export const SessionOnly = () => SetMetadata(SESSION_ONLY, true);

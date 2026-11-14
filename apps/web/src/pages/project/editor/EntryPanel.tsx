@@ -15,7 +15,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, App, Button, Dropdown, Input, Space, Tabs, Tag, Tooltip, Typography } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { Engine, PERMISSIONS, Permission, RtUser, Stage, missingControlCodes, missingTags } from '@gametrans/shared';
+import { Engine, PERMISSIONS, Permission, RtUser, Stage, checkMarkup } from '@gametrans/shared';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { api } from '../../../api/client';
 import type { Entry, HistoryItem, Term } from '../../../api/types';
@@ -64,16 +64,12 @@ const DANGER_HINT: Record<string, string> = {
   eventName: 'entry.warnEventName',
   mapName: 'entry.warnMapName',
 };
-/** 这些分类的文本里有插件读取的 <标签> */
-const TAGGED = new Set(['comment', 'note']);
+const uniq = (a: string[]) => [...new Set(a)];
 
-/** 译文中缺失的控制符与插件标签（去重）；译文为空时不检查 */
+/** 译文中缺失的控制符、%1 占位符与插件标签（去重）；译文为空时不检查 */
 export function missingMarkup(entry: Pick<Entry, 'original' | 'category'>, draft: string): { codes: string[]; tags: string[] } {
-  if (!draft) return { codes: [], tags: [] };
-  return {
-    codes: [...new Set(missingControlCodes(entry.original, draft))],
-    tags: TAGGED.has(entry.category) ? [...new Set(missingTags(entry.original, draft))] : [],
-  };
+  const r = checkMarkup(entry.original, draft, entry.category);
+  return { codes: uniq([...r.missingCodes, ...r.missingPlaceholders]), tags: uniq(r.missingTags) };
 }
 
 interface QaItem {
@@ -84,10 +80,17 @@ interface QaItem {
 /** 译文质量检查：控制符、行数、首尾空白、术语 */
 function qaCheck(entry: Entry, draft: string, engine: Engine, matched: Term[], t: TFn): QaItem[] {
   const out: QaItem[] = [];
+  const r = checkMarkup(entry.original, draft, entry.category);
+  // 原文控制符本身的问题：译文为空时也提示，便于译者修正
+  if (r.sourceIssues.length) {
+    out.push({ type: 'warning', text: t('entry.qa.sourceIssues', { codes: uniq(r.sourceIssues.map((i) => i.text)).join(' ') }) });
+  }
   if (!draft) return out;
   const { codes, tags } = missingMarkup(entry, draft);
   if (codes.length) out.push({ type: 'warning', text: t('entry.qa.missingCodes', { codes: codes.join(' ') }) });
   if (tags.length) out.push({ type: 'warning', text: t('entry.qa.missingTags', { tags: tags.join(' ') }) });
+  const extra = uniq([...r.extraCodes, ...r.extraPlaceholders]);
+  if (extra.length) out.push({ type: 'info', text: t('entry.qa.extraCodes', { codes: extra.join(' ') }) });
   const lo = lineCount(entry.original);
   const lt = lineCount(draft);
   if (entry.category === 'dialogue') {

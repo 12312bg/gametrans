@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { TokensService } from '../auth/tokens.service';
 import { AUTH_COOKIE } from '../config';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthUser, AuthedRequest, IS_PUBLIC, SESSION_ONLY } from './decorators';
+import { AuthUser, AuthedRequest, IS_PUBLIC, READ_ONLY_POST, SESSION_ONLY } from './decorators';
 import { fail } from './errors';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -32,7 +32,7 @@ export class AuthGuard implements CanActivate {
       const m = /^Bearer\s+(\S+)$/i.exec(authz);
       if (!m) throw fail('BAD_AUTH_HEADER');
       req.user = await this.tokens.authenticate(m[1]);
-      this.checkToken(req, req.user, meta<boolean>(SESSION_ONLY));
+      this.checkToken(req, req.user, meta<boolean>(SESSION_ONLY), meta<boolean>(READ_ONLY_POST));
       return true;
     }
 
@@ -54,10 +54,10 @@ export class AuthGuard implements CanActivate {
     }
   }
 
-  private checkToken(req: AuthedRequest, user: AuthUser, sessionOnly?: boolean) {
+  private checkToken(req: AuthedRequest, user: AuthUser, sessionOnly?: boolean, readOnlyPost?: boolean) {
     const t = user.token!;
     if (sessionOnly) throw fail('SESSION_ONLY');
-    if (t.scope === 'READ' && !READ_METHODS.has(req.method)) throw fail('TOKEN_READ_ONLY');
+    if (t.scope === 'READ' && !READ_METHODS.has(req.method) && !(readOnlyPost && req.method === 'POST')) throw fail('TOKEN_READ_ONLY');
     if (t.projectId) {
       const path = (req.originalUrl || req.url).split('?')[0].replace(/\/+$/, '');
       const base = `/api/projects/${t.projectId}`;

@@ -55,3 +55,18 @@ export interface TermSnapshot {
   note: string;
   caseSensitive: boolean;
 }
+
+/**
+ * 事件指令中的分支位置（由外到内）。条件只存类型与参数，查看时按语言渲染。
+ * - choice：「选择 [i] 时」，text 为选项原文
+ * - cancel：「取消时」
+ * - if / else：条件分支（type 为 RPG Maker 的条件类型，args 为其余参数）
+ * - battle：战斗处理的「胜利 / 逃跑 / 失败时」
+ * - loop：循环
+ */
+export type BranchStep =
+  | { k: 'choice'; i: number; text: string }
+  | { k: 'cancel' }
+  | { k: 'if' | 'else'; type: number; args: (string | number | boolean)[] }
+  | { k: 'battle'; result: 'win' | 'escape' | 'lose' }
+  | { k: 'loop' };

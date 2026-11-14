@@ -44,7 +44,7 @@ type Source = readonly [string, () => Promise<Uint8Array>];
 
 const PREVIEW_ITEMS = 100;
 
-const EXISTING_SELECT = { id: true, key: true, original: true, translation: true, stage: true, contextData: true, category: true, danger: true, sortOrder: true } as const;
+const EXISTING_SELECT = { id: true, key: true, original: true, translation: true, stage: true, contextData: true, category: true, danger: true, sortOrder: true, branch: true } as const;
 type ExistingEntry = Prisma.EntryGetPayload<{ select: typeof EXISTING_SELECT }>;
 
 interface MetaRow {
@@ -55,6 +55,8 @@ interface MetaRow {
   category: string;
   danger: boolean;
   key: string;
+  /** 分支路径 JSON；空字符串表示没有 */
+  branch: string;
 }
 
 /** 合并方案：由新旧词条计算得出，预览与实际导入共用 */
@@ -240,6 +242,7 @@ export class ParseService {
       category: e.category,
       danger: e.danger,
       key: e.key,
+      branch: e.branch?.length ? JSON.stringify(e.branch) : '',
     });
 
     extracted.forEach((e, order) => {
@@ -251,7 +254,8 @@ export class ParseService {
         plan.sourceChanged.push({ id: ex.id, key: e.key, original: e.original, oldOriginal: ex.original, translation: ex.translation, stage });
       }
       const contextChanged = JSON.stringify(ex.contextData) !== JSON.stringify(e.context);
-      if (ex.sortOrder !== order || contextChanged || ex.category !== e.category || ex.danger !== e.danger) plan.meta.push(metaOf(ex.id, e, order));
+      const branchChanged = JSON.stringify(ex.branch ?? null) !== JSON.stringify(e.branch?.length ? e.branch : null);
+      if (ex.sortOrder !== order || contextChanged || branchChanged || ex.category !== e.category || ex.danger !== e.danger) plan.meta.push(metaOf(ex.id, e, order));
     });
 
     const unusedByOriginal = new Map<string, ExistingEntry[]>();
@@ -285,6 +289,7 @@ export class ParseService {
       contextSearch: contextSearchText(e.context),
       category: e.category,
       danger: e.danger,
+      ...(e.branch?.length ? { branch: json(e.branch) } : {}),
       stage: e.danger ? 'HIDDEN' : 'UNTRANSLATED',
       sortOrder: order,
     }));
@@ -295,7 +300,7 @@ export class ParseService {
         for (const part of chunk(meta, 5000)) {
           await tx.$executeRaw`
             UPDATE "Entry" AS e
-            SET "sortOrder" = v.o, "contextData" = v.c::jsonb, "contextSearch" = v.s, "category" = v.cat, "danger" = v.d, "key" = v.k
+            SET "sortOrder" = v.o, "contextData" = v.c::jsonb, "contextSearch" = v.s, "category" = v.cat, "danger" = v.d, "key" = v.k, "branch" = NULLIF(v.b, '')::jsonb
             FROM (
               SELECT unnest(${part.map((m) => m.id)}::text[]) AS id,
                      unnest(${part.map((m) => m.sortOrder)}::int[]) AS o,
@@ -303,7 +308,8 @@ export class ParseService {
                      unnest(${part.map((m) => m.search)}::text[]) AS s,
                      unnest(${part.map((m) => m.category)}::text[]) AS cat,
                      unnest(${part.map((m) => m.danger)}::boolean[]) AS d,
-                     unnest(${part.map((m) => m.key)}::text[]) AS k
+                     unnest(${part.map((m) => m.key)}::text[]) AS k,
+                     unnest(${part.map((m) => m.branch)}::text[]) AS b
             ) AS v
             WHERE e.id = v.id`;
         }

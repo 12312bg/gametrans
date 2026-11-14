@@ -266,6 +266,8 @@ model EntryHistory {
   stage       Stage
   /// 原文变更时记录旧原文
   note        String   @default("")
+  /// 同一次批量操作（批量审核、替换、记忆填充、同步、文件解析）的记录共用一个 ID，历史记录页合并显示
+  batchId     String?
   createdAt   DateTime @default(now())
 
   entry   Entry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
@@ -275,6 +277,7 @@ model EntryHistory {
   @@index([entryId, createdAt])
   @@index([projectId, createdAt])
   @@index([projectId, userId])
+  @@index([batchId])
 }
 
 model Term {
@@ -309,6 +312,8 @@ model TermHistory {
   before    Json?
   /// 修改后的内容；删除时为空
   after     Json?
+  /// 同一次导入的记录共用一个 ID
+  batchId   String?
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -316,6 +321,7 @@ model TermHistory {
 
   @@index([projectId, createdAt])
   @@index([projectId, userId])
+  @@index([batchId])
 }
 
 model Job {

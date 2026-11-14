@@ -314,4 +314,22 @@ export interface TermHistoryRecord {
   after: TermSnapshot | null;
 }
 
-export type ProjectHistoryRecord = EntryHistoryRecord | TermHistoryRecord;
+/** 一次批量操作的合并记录 */
+export interface BatchHistoryRecord<K extends 'entry-batch' | 'term-batch', R> {
+  kind: K;
+  id: string;
+  batchId: string;
+  action: string;
+  note: string;
+  user: UserBrief | null;
+  createdAt: string;
+  count: number;
+  /** 前几条记录预览 */
+  samples: R[];
+}
+
+export type ProjectHistoryRecord =
+  | EntryHistoryRecord
+  | TermHistoryRecord
+  | BatchHistoryRecord<'entry-batch', EntryHistoryRecord>
+  | BatchHistoryRecord<'term-batch', TermHistoryRecord>;

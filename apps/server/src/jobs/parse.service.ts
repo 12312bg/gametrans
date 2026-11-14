@@ -89,7 +89,7 @@ export class ParseService {
       for (const [i, [path, load]] of sources.entries()) {
         try {
           const data = await load();
-          const r = preview ? await this.previewFile(project, path, data) : await this.importFile(project, path, data, job.createdById, !!payload.reextract);
+          const r = preview ? await this.previewFile(project, path, data) : await this.importFile(project, path, data, job.createdById, !!payload.reextract, job.id);
           if (r) result.files.push(r);
           else result.skipped.push({ name: path, code: 'NO_TEXT' });
         } catch (e) {
@@ -190,7 +190,7 @@ export class ParseService {
    * 保存原文件并合并词条；没有文本的新文件返回 null。
    * 文件内容未变时跳过，除非 reextract（提取规则更新后重新合并）。
    */
-  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false): Promise<FileImportResult | null> {
+  async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false, batchId: string | null = null): Promise<FileImportResult | null> {
     const { kind, entries, warnings } = extractEntries(path, data, project.engine as Engine);
     const existing = await this.prisma.file.findUnique({ where: { projectId_path: { projectId: project.id, path } } });
     if (!existing && !entries.length) return null;
@@ -198,7 +198,7 @@ export class ParseService {
     if (existing?.sha256 === sha256) {
       if (!reextract) return { path, status: 'unchanged', total: entries.length, added: 0, changed: 0, removed: 0 };
       await this.prisma.file.update({ where: { id: existing.id }, data: { kind, warnings: json(warnings) } });
-      const stats = await this.mergeEntries(project.id, existing.id, entries, userId);
+      const stats = await this.mergeEntries(project.id, existing.id, entries, userId, batchId);
       const touched = stats.added + stats.changed + stats.removed > 0;
       return { path, status: touched ? 'updated' : 'unchanged', total: entries.length, ...stats };
     }
@@ -209,7 +209,7 @@ export class ParseService {
     const file = existing
       ? await this.prisma.file.update({ where: { id: existing.id }, data: fileData })
       : await this.prisma.file.create({ data: { projectId: project.id, path, ...fileData } });
-    const stats = await this.mergeEntries(project.id, file.id, entries, userId);
+    const stats = await this.mergeEntries(project.id, file.id, entries, userId, batchId);
     if (existing && existing.storageKey !== storageKey && !(await this.prisma.file.count({ where: { storageKey: existing.storageKey } }))) {
       await this.storage.remove(existing.storageKey);
     }
@@ -272,7 +272,8 @@ export class ParseService {
     return plan;
   }
 
-  private async mergeEntries(projectId: string, fileId: string, extracted: ExtractedEntry[], userId: string | null) {
+  /** batchId：同一次解析任务的原文变更记录在历史记录页合并显示（使用任务 ID） */
+  private async mergeEntries(projectId: string, fileId: string, extracted: ExtractedEntry[], userId: string | null, batchId: string | null) {
     const { meta, sourceChanged, creates: planned, removed } = this.planMerge(await this.loadExisting(fileId), extracted);
     const removeIds = removed.map((r) => r.id);
     const creates: Prisma.EntryCreateManyInput[] = planned.map(({ e, order }) => ({
@@ -311,7 +312,7 @@ export class ParseService {
         }
         for (const part of chunk(sourceChanged, 2000)) {
           await tx.entryHistory.createMany({
-            data: part.map((s) => ({ entryId: s.id, projectId, userId, action: 'SOURCE_CHANGED', translation: s.translation, stage: s.stage, note: s.oldOriginal })),
+            data: part.map((s) => ({ entryId: s.id, projectId, userId, action: 'SOURCE_CHANGED', translation: s.translation, stage: s.stage, note: s.oldOriginal, batchId })),
           });
         }
         for (const part of chunk(creates, 2000)) await tx.entry.createMany({ data: part });

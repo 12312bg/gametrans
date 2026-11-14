@@ -67,6 +67,15 @@ const DANGER_HINT: Record<string, string> = {
 /** 这些分类的文本里有插件读取的 <标签> */
 const TAGGED = new Set(['comment', 'note']);
 
+/** 译文中缺失的控制符与插件标签（去重）；译文为空时不检查 */
+export function missingMarkup(entry: Pick<Entry, 'original' | 'category'>, draft: string): { codes: string[]; tags: string[] } {
+  if (!draft) return { codes: [], tags: [] };
+  return {
+    codes: [...new Set(missingControlCodes(entry.original, draft))],
+    tags: TAGGED.has(entry.category) ? [...new Set(missingTags(entry.original, draft))] : [],
+  };
+}
+
 interface QaItem {
   type: 'warning' | 'info';
   text: string;
@@ -76,10 +85,9 @@ interface QaItem {
 function qaCheck(entry: Entry, draft: string, engine: Engine, matched: Term[], t: TFn): QaItem[] {
   const out: QaItem[] = [];
   if (!draft) return out;
-  const missing = missingControlCodes(entry.original, draft);
-  if (missing.length) out.push({ type: 'warning', text: t('entry.qa.missingCodes', { codes: [...new Set(missing)].join(' ') }) });
-  const tags = TAGGED.has(entry.category) ? missingTags(entry.original, draft) : [];
-  if (tags.length) out.push({ type: 'warning', text: t('entry.qa.missingTags', { tags: [...new Set(tags)].join(' ') }) });
+  const { codes, tags } = missingMarkup(entry, draft);
+  if (codes.length) out.push({ type: 'warning', text: t('entry.qa.missingCodes', { codes: codes.join(' ') }) });
+  if (tags.length) out.push({ type: 'warning', text: t('entry.qa.missingTags', { tags: tags.join(' ') }) });
   const lo = lineCount(entry.original);
   const lt = lineCount(draft);
   if (entry.category === 'dialogue') {
@@ -254,7 +262,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
           </Space>
         </div>
         <div className="original-text pre-wrap">
-          <Highlighted text={entry.original} terms={terms} />
+          <Highlighted text={entry.original} terms={terms} onInsert={canEdit ? insert : undefined} insertHint={t('entry.clickToInsert')} />
         </div>
       </div>
 

@@ -11,7 +11,7 @@ import { useT } from '../../../i18n';
 import { errorMessage } from '../../../utils';
 import { BatchBar, EditorToolbar, EntryFilter } from './EditorToolbar';
 import { EntryList, PAGE_SIZES } from './EntryList';
-import { EntryPanel, EntryPanelHandle } from './EntryPanel';
+import { EntryPanel, EntryPanelHandle, missingMarkup } from './EntryPanel';
 import { ReplaceModal } from './ReplaceModal';
 import { useShortcuts } from './useShortcuts';
 
@@ -178,13 +178,69 @@ export default function EditorPage() {
       api<Entry>(`/projects/${pid}/entries/${v.id}`, { method: 'PUT', body: { translation: v.translation, stage: v.stage, version: v.version } }),
   });
 
-  const save = async (opts: { stage?: Stage; next?: boolean } = {}, entry = current, version?: number): Promise<void> => {
-    if (!entry) return;
+  /** 缺少控制符 / 标签时先确认；返回 false 表示取消 */
+  const confirming = useRef(false);
+  const confirmMarkup = (entry: Entry, translation: string, approving: boolean) =>
+    new Promise<boolean>((done) => {
+      const { codes, tags } = missingMarkup(entry, translation);
+      if (!codes.length && !tags.length) return done(true);
+      confirming.current = true;
+      const resolve = (v: boolean) => {
+        confirming.current = false;
+        done(v);
+      };
+      modal.confirm({
+        title: t(approving ? 'editor.markupApproveTitle' : 'editor.markupSaveTitle'),
+        width: 520,
+        content: (
+          <div className="markup-confirm">
+            <p>{t('editor.markupDesc')}</p>
+            {codes.length > 0 && (
+              <div>
+                {t('editor.markupCodes')}
+                {codes.map((c) => (
+                  <span key={c} className="hl-code">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
+            {tags.length > 0 && (
+              <div>
+                {t('editor.markupTags')}
+                {tags.map((c) => (
+                  <span key={c} className="hl-code">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+        okText: t(approving ? 'editor.markupApproveAnyway' : 'editor.markupSaveAnyway'),
+        okButtonProps: { danger: true },
+        cancelText: t('editor.markupBack'),
+        autoFocusButton: 'cancel',
+        onOk: () => resolve(true),
+        onCancel: () => {
+          resolve(false);
+          requestAnimationFrame(() => panelRef.current?.focus());
+        },
+      });
+    });
+
+  const save = async (opts: { stage?: Stage; next?: boolean } = {}, entry = current, version?: number, checked = false): Promise<void> => {
+    // 确认框打开时忽略快捷键再次触发的保存
+    if (!entry || confirming.current) return;
     const translation = draftOf(entry);
     if (!opts.stage && translation === entry.translation) {
       if (opts.next) move(1);
       return;
     }
+    // 修改译文或审核通过时检查控制符；标记疑问、锁定、隐藏等不检查
+    const approving = opts.stage === 'REVIEWED';
+    const checkable = approving || ((!opts.stage || opts.stage === 'TRANSLATED') && translation !== entry.translation);
+    if (!checked && checkable && !(await confirmMarkup(entry, translation, approving))) return;
     try {
       applyUpdated(await saveMut.mutateAsync({ id: entry.id, translation, stage: opts.stage, version: version ?? bases.current[entry.id] ?? entry.version }));
       if (opts.next) move(1);
@@ -208,7 +264,7 @@ export default function EditorPage() {
         ),
         okText: t('editor.conflictOverwrite'),
         cancelText: t('editor.conflictUseTheirs'),
-        onOk: () => save(opts, theirs, theirs.version),
+        onOk: () => save(opts, theirs, theirs.version, true),
         onCancel: () => applyUpdated(theirs),
       });
     }

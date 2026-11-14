@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { ActivityService } from '../common/activity.service';
 import { fail } from '../common/errors';
 import { chunk } from '../common/query';
@@ -119,6 +120,7 @@ export class TermsService {
     let created = 0;
     let updated = 0;
     const log: Prisma.TermHistoryCreateManyInput[] = [];
+    const batchId = randomUUID();
     for (const [term, translation, note = ''] of rows) {
       const exist = await this.prisma.term.findUnique({ where: { projectId_term: { projectId: pid, term } } });
       if (!exist) {
@@ -131,7 +133,7 @@ export class TermsService {
         updated++;
       }
     }
-    for (const part of chunk(log, 2000)) await this.prisma.termHistory.createMany({ data: part });
+    for (const part of chunk(log, 2000)) await this.prisma.termHistory.createMany({ data: part.map((l) => ({ ...l, batchId })) });
     await this.activity.log(pid, userId, 'terms.import', { created, updated });
     if (log.length) this.changed(pid, user);
     return { created, updated, skipped: rows.length - created - updated };

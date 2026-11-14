@@ -746,6 +746,17 @@ body {
   border-bottom: 2px solid var(--term-line);
   cursor: help;
 }
+.hl-code.insertable,
+.hl-term.insertable {
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.hl-code.insertable:hover {
+  box-shadow: 0 0 0 1px var(--code-fg);
+}
+.hl-term.insertable:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
 .qa-list {
   margin-top: 8px;
   display: flex;
@@ -1386,4 +1397,44 @@ mark.diff-ins {
   .history-body {
     padding: 10px 12px;
   }
+}
+
+.markup-confirm .hl-code {
+  margin-right: 4px;
+}
+.markup-confirm > div + div {
+  margin-top: 6px;
+}
+
+/* 历史记录：批量操作合并显示 */
+.history-head.compact {
+  display: block;
+  margin-bottom: 6px;
+  line-height: 24px;
+  word-break: break-word;
+}
+.history-batch-tag {
+  margin-left: 6px;
+}
+.history-batch {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.history-batch-item + .history-batch-item {
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+.history-batch-item .history-body {
+  padding: 8px 12px;
+}
+.history-batch > .ant-btn {
+  align-self: flex-start;
+  padding-left: 0;
+}
+.history-batch-pager {
+  align-self: center;
 }

@@ -2907,7 +2907,7 @@
       "get": {
         "operationId": "HistoryController_list",
         "summary": "项目历史记录",
-        "description": "词条与术语的修改记录，按时间倒序。词条记录带有上一版本的译文与状态（`prevTranslation` / `prevStage`，首条记录为 null）用于对比；原文变更记录带有 `oldOriginal` / `newOriginal`。公开项目无需登录。",
+        "description": "词条与术语的修改记录，按时间倒序；同一次批量操作合并为一条（`kind` 为 `entry-batch` / `term-batch`，带总数 `count` 与前几条预览 `samples`）。词条记录带有上一版本的译文与状态（`prevTranslation` / `prevStage`，首条记录为 null）用于对比；原文变更记录带有 `oldOriginal` / `newOriginal`。公开项目无需登录。",
         "parameters": [
           {
             "name": "pid",
@@ -2936,6 +2936,57 @@
             "name": "userId",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "每页条数",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "历史记录"
+        ]
+      }
+    },
+    "/api/projects/{pid}/history/batches/{batchId}": {
+      "get": {
+        "operationId": "HistoryController_batch",
+        "summary": "批量操作的全部记录",
+        "description": "列表中 `kind` 为 `entry-batch` / `term-batch` 的一组记录，按时间顺序分页返回。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
             "schema": {
               "type": "string"
             }

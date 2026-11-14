@@ -17,6 +17,7 @@ import {
   replaceWithSegments,
 } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { AccessService, ProjectContext } from '../common/access.service';
 import { ActivityService } from '../common/activity.service';
 import { fail } from '../common/errors';
@@ -308,6 +309,7 @@ export class EntriesService {
       groups.set(to, g);
     }
     const now = new Date();
+    const batchId = randomUUID();
     for (const [to, list] of groups) {
       for (const part of chunk(list, 5000)) {
         const data: Prisma.EntryUncheckedUpdateManyInput = { stage: to, version: { increment: 1 }, updatedAt: now };
@@ -324,6 +326,7 @@ export class EntriesService {
             translation: action === 'clear' ? '' : r.translation,
             stage: to,
             note: action,
+            batchId,
           })),
         });
       }
@@ -367,13 +370,14 @@ export class EntriesService {
     });
     if (allowed.length) {
       const ids = allowed.map((x) => x.id);
+      const batchId = randomUUID();
       const data: Prisma.EntryUncheckedUpdateManyInput = { translation: src.translation, stage: to, translatorId: userId, version: { increment: 1 }, updatedAt: new Date() };
       if (to === 'REVIEWED') data.reviewerId = userId;
       else if (to !== 'LOCKED') data.reviewerId = null;
       await this.prisma.$transaction([
         this.prisma.entry.updateMany({ where: { id: { in: ids } }, data }),
         this.prisma.entryHistory.createMany({
-          data: ids.map((entryId) => ({ entryId, projectId, userId, action: 'SYNC', translation: src.translation, stage: to })),
+          data: ids.map((entryId) => ({ entryId, projectId, userId, action: 'SYNC', translation: src.translation, stage: to, batchId })),
         }),
       ]);
       const text = src.original.length > 30 ? `${src.original.slice(0, 30)}…` : src.original;
@@ -423,6 +427,7 @@ export class EntriesService {
 
     const userId = ctx.user!.id;
     const note = `${o.find} → ${o.replace}`.slice(0, 200);
+    const batchId = randomUUID();
     let affected = 0;
     for (const part of chunk(changes, 2000)) {
       // 版本号不一致说明期间被他人修改，跳过
@@ -438,7 +443,7 @@ export class EntriesService {
         RETURNING e.id, e.stage, e.translation`;
       affected += updated.length;
       await this.prisma.entryHistory.createMany({
-        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'REPLACE', translation: u.translation, stage: u.stage, note })),
+        data: updated.map((u) => ({ entryId: u.id, projectId, userId, action: 'REPLACE', translation: u.translation, stage: u.stage, note, batchId })),
       });
     }
     if (affected) {
@@ -493,9 +498,10 @@ export class EntriesService {
       WHERE e."projectId" = ${projectId} AND e.stage = 'UNTRANSLATED' AND e.translation = ''
         AND e.original = src.original ${fileCond}
       RETURNING e.id, e.translation`;
+    const batchId = randomUUID();
     for (const part of chunk(updated, 5000)) {
       await this.prisma.entryHistory.createMany({
-        data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const })),
+        data: part.map((r) => ({ entryId: r.id, projectId, userId, action: 'TM_FILL', translation: r.translation, stage: 'TRANSLATED' as const, batchId })),
       });
     }
     if (updated.length) {

@@ -13,6 +13,7 @@ import { BatchBar, EditorToolbar, EntryFilter } from './EditorToolbar';
 import { EntryList, PAGE_SIZES } from './EntryList';
 import { EntryPanel, EntryPanelHandle, missingMarkup } from './EntryPanel';
 import { ReplaceModal } from './ReplaceModal';
+import { IdenticalCounts, useAfterSave } from './useAfterSave';
 import { useShortcuts } from './useShortcuts';
 
 const SIZE_KEY = 'gt-editor-page-size';
@@ -157,6 +158,7 @@ export default function EditorPage() {
   const refreshAll = () => {
     for (const key of ['entries', 'entry', 'project', 'files']) qc.invalidateQueries({ queryKey: [key, pid] });
   };
+  const afterSave = useAfterSave(pid, refreshAll);
 
   const move = (dir: 1 | -1) => {
     const idx = items.findIndex((e) => e.id === selectedId);
@@ -175,7 +177,10 @@ export default function EditorPage() {
 
   const saveMut = useMutation({
     mutationFn: (v: { id: string; translation: string; stage?: Stage; version: number }) =>
-      api<Entry>(`/projects/${pid}/entries/${v.id}`, { method: 'PUT', body: { translation: v.translation, stage: v.stage, version: v.version } }),
+      api<Entry & { identical?: IdenticalCounts }>(`/projects/${pid}/entries/${v.id}?identical=1`, {
+        method: 'PUT',
+        body: { translation: v.translation, stage: v.stage, version: v.version },
+      }),
   });
 
   /** 缺少控制符 / 标签时先确认；返回 false 表示取消 */
@@ -242,7 +247,16 @@ export default function EditorPage() {
     const checkable = approving || ((!opts.stage || opts.stage === 'TRANSLATED') && translation !== entry.translation);
     if (!checked && checkable && !(await confirmMarkup(entry, translation, approving))) return;
     try {
-      applyUpdated(await saveMut.mutateAsync({ id: entry.id, translation, stage: opts.stage, version: version ?? bases.current[entry.id] ?? entry.version }));
+      const saved = await saveMut.mutateAsync({ id: entry.id, translation, stage: opts.stage, version: version ?? bases.current[entry.id] ?? entry.version });
+      const { identical: _i, ...updated } = saved;
+      applyUpdated(updated);
+      // 询问相同原文时屏蔽快捷键的再次保存
+      confirming.current = true;
+      try {
+        await afterSave(entry, saved);
+      } finally {
+        confirming.current = false;
+      }
       if (opts.next) move(1);
     } catch (e) {
       const theirs = e instanceof ApiError && e.code === 'ENTRY_CONFLICT' ? (e.data as { current?: Entry }).current : undefined;

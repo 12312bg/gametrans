@@ -65,7 +65,9 @@ export function EditorToolbar({ filter, setParam, files, canFill, onFill, onRepl
         />
         <Select
           mode="multiple"
-          style={{ minWidth: 160 }}
+          // 固定宽度：选中较长的选项（如「地图名（编辑器）」）时不改变工具栏布局，避免换行与跳动
+          style={{ width: 170 }}
+          popupMatchSelectWidth={220}
           maxTagCount="responsive"
           placeholder={t('editor.allStages')}
           allowClear
@@ -83,7 +85,8 @@ export function EditorToolbar({ filter, setParam, files, canFill, onFill, onRepl
         />
         <Select
           mode="multiple"
-          style={{ minWidth: 140 }}
+          style={{ width: 170 }}
+          popupMatchSelectWidth={220}
           maxTagCount="responsive"
           placeholder={t('editor.allCategories')}
           allowClear

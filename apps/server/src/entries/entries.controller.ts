@@ -4,7 +4,7 @@ import { ApiConflictResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } f
 import { AccessService } from '../common/access.service';
 import { AuthUser, CurrentUser, Public, ReadOnlyPost } from '../common/decorators';
 import { T, Translator } from '../common/locale';
-import { BatchDto, BulkSaveDto, FillDto, ReplaceDto, RollbackDto, TmLookupDto, UpdateEntryDto } from './entries.dto';
+import { BatchDto, BulkSaveDto, FillDto, PropagateDto, ReplaceDto, RollbackDto, TmLookupDto, UpdateEntryDto } from './entries.dto';
 import { EntriesService, EntryFilter, withContextText } from './entries.service';
 import { EntryModel, PagedEntriesModel } from '../common/api.models';
 
@@ -79,13 +79,39 @@ export class EntriesController {
     return this.entries.neighbors(pid, eid);
   }
 
-  @ApiOperation({ summary: '保存译文 / 修改状态', description: '必须带上当前 `version`；若已被他人修改返回 409，响应中的 `current` 为最新词条。不传 `stage` 时自动推断（有译文 → 已翻译）。' })
+  @ApiOperation({
+    summary: '保存译文 / 修改状态',
+    description:
+      '必须带上当前 `version`；若已被他人修改返回 409，响应中的 `current` 为最新词条。不传 `stage` 时自动推断（有译文 → 已翻译）。' +
+      '带 `?identical=1` 时响应附带 `identical`：原文完全相同、当前用户可修改的其他词条数（fill 未翻译 / sameText 仅状态不同 / differ 已有不同译文 / skipped 无权修改），用于询问是否批量执行。',
+  })
+  @ApiQuery({ name: 'identical', required: false })
   @ApiOkResponse({ type: EntryModel })
   @ApiConflictResponse({ description: '版本冲突，响应包含 message 与 current（最新词条）' })
   @Put('entries/:eid')
-  async update(@CurrentUser() user: AuthUser, @T() t: Translator, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: UpdateEntryDto) {
+  async update(
+    @CurrentUser() user: AuthUser,
+    @T() t: Translator,
+    @Param('pid') pid: string,
+    @Param('eid') eid: string,
+    @Body() dto: UpdateEntryDto,
+    @Query('identical') identical?: string,
+  ) {
     const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
-    return withContextText(await this.entries.update(ctx, eid, dto), t);
+    const entry = withContextText(await this.entries.update(ctx, eid, dto), t);
+    return identical ? { ...entry, identical: await this.entries.identicalSummary(ctx, eid) } : entry;
+  }
+
+  @ApiOperation({
+    summary: '应用到原文相同的词条',
+    description:
+      '把该词条当前的译文与状态应用到原文完全相同的其他词条（不含已隐藏、跳过无权修改的）。默认只改未翻译的和仅状态不同的，`overwrite: true` 时也覆盖已有不同译文的。' +
+      '返回 `previous`：每条修改前的译文、状态与修改后的版本，可用批量保存接口撤销。历史记录中合并为一组。',
+  })
+  @Post('entries/:eid/propagate')
+  async propagate(@CurrentUser() user: AuthUser, @Param('pid') pid: string, @Param('eid') eid: string, @Body() dto: PropagateDto) {
+    const ctx = await this.access.require(user, pid, PERMISSIONS.TRANSLATE);
+    return this.entries.propagate(ctx, eid, dto.overwrite);
   }
 
   @ApiOperation({

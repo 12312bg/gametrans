@@ -1499,3 +1499,15 @@ mark.diff-ins {
 .scene-hint {
   margin-top: 8px;
 }
+
+.propagate-body ul {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+}
+.propagate-body .ant-tag {
+  margin-left: 4px;
+}
+.revert-btn {
+  padding: 0 4px;
+  height: auto;
+}

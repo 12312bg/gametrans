@@ -284,6 +284,26 @@ export default function EditorPage() {
     }
   };
 
+  /**
+   * 从上下文、相同字符串等处跳转：左侧列表翻到包含该词条的那一页。
+   * 词条不在当前筛选结果中时保持当前页，只在右侧临时显示该词条。
+   */
+  const jumpTo = async (id: string) => {
+    if (items.some((e) => e.id === id)) return select(id);
+    try {
+      const { index } = await api<{ index: number | null }>(
+        `/projects/${pid}/entries/${id}/position${qs({ ...filter, field: filter.q ? filter.field : undefined })}`,
+      );
+      if (index !== null) {
+        const target = Math.floor(index / pageSize) + 1;
+        return setParam({ page: target > 1 ? String(target) : null, entry: id }, false);
+      }
+    } catch {
+      /* 定位失败时只选中该词条 */
+    }
+    select(id);
+  };
+
   /** 只看该词条所在的文件（清除搜索与分类），并停在包含它的那一页 */
   const jumpToFile = async (e: Entry) => {
     const next = { ...filter, fileId: e.fileId, q: '', category: '' };
@@ -435,7 +455,7 @@ export default function EditorPage() {
               saving={saveMut.isPending}
               onSave={(o) => void save(o)}
               onRollback={rollback}
-              onJump={select}
+              onJump={(id) => void jumpTo(id)}
               onFile={() => void jumpToFile(current)}
               sideTab={sideTab}
               onSideTab={setSideTab}

@@ -35,9 +35,18 @@ export function EntryList(p: Props) {
   const t = useT();
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
 
+  // 选中项变化后滚动到它；跳转到其他页时等新一页渲染出来再滚动（只滚动一次，实时更新不会把列表拉回）
+  const pendingScroll = useRef<string | null>(null);
   useEffect(() => {
-    if (p.selectedId) itemRefs.current.get(p.selectedId)?.scrollIntoView({ block: 'nearest' });
+    pendingScroll.current = p.selectedId;
   }, [p.selectedId]);
+  useEffect(() => {
+    const id = pendingScroll.current;
+    const el = id ? itemRefs.current.get(id) : undefined;
+    if (!el) return;
+    el.scrollIntoView({ block: 'nearest' });
+    pendingScroll.current = null;
+  }, [p.selectedId, p.items]);
 
   const toggle = (id: string, on: boolean) => {
     const next = new Set(p.checked);

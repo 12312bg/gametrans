@@ -54,6 +54,8 @@ interface Props {
   stale: { by: RtUser | null } | null;
   onDiscardDraft: () => void;
   onKeepDraft: () => void;
+  /** 三栏布局：上下文在右栏独立显示，不再作为标签页 */
+  contextDocked?: boolean;
 }
 
 const lineCount = (s: string) => (s === '' ? 0 : s.split('\n').length);
@@ -369,7 +371,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
       <Tabs
         className="side-tabs"
         size="small"
-        activeKey={props.sideTab === 'linked' && !linked.length ? 'tm' : props.sideTab}
+        activeKey={(props.sideTab === 'linked' && !linked.length) || (props.sideTab === 'context' && props.contextDocked) ? 'tm' : props.sideTab}
         onChange={props.onSideTab}
         items={[
           { key: 'tm', label: t('side.tm'), children: <TMTab pid={pid} entry={entry} onUse={onDraft} canEdit={canEdit} /> },
@@ -378,7 +380,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
             label: matched.length ? t('side.termsCount', { count: matched.length }) : t('side.terms'),
             children: <TermsTab matched={matched} onInsert={insert} canEdit={canEdit} />,
           },
-          { key: 'context', label: t('side.context'), children: <ContextTab pid={pid} entry={entry} onJump={props.onJump} /> },
+          ...(props.contextDocked ? [] : [{ key: 'context', label: t('side.context'), children: <ContextTab pid={pid} entry={entry} onJump={props.onJump} /> }]),
           { key: 'history', label: t('side.history'), children: <HistoryTab pid={pid} entry={entry} canEdit={canEdit} onRollback={props.onRollback} /> },
           ...(linked.length ? [{ key: 'linked', label: t('linked.tab', { count: linked.length }), children: <LinkedTab items={linked} onJump={props.onJump} /> }] : []),
         ]}

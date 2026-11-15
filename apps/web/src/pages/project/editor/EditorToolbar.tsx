@@ -1,5 +1,5 @@
-import { ClearOutlined, DownOutlined, FileSearchOutlined, QuestionCircleOutlined, ReloadOutlined, SelectOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Dropdown, Input, Popover, Select, Space, Tooltip, Typography } from 'antd';
+import { ClearOutlined, DownOutlined, FileSearchOutlined, LayoutOutlined, PicCenterOutlined, QuestionCircleOutlined, ReloadOutlined, SelectOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Dropdown, Input, Popover, Segmented, Select, Space, Tooltip, Typography } from 'antd';
 import { BatchAction, ENTRY_CATEGORIES, STAGES } from '@gametrans/shared';
 import { useEffect, useState } from 'react';
 import type { FileItem } from '../../../api/types';
@@ -33,9 +33,15 @@ interface ToolbarProps {
   batchMode: boolean;
   onToggleBatch: () => void;
   onRefresh: () => void;
+  layout: EditorLayout;
+  onLayout: (l: EditorLayout) => void;
+  /** 窗口太窄时只能两栏 */
+  canThree: boolean;
 }
 
-export function EditorToolbar({ filter, setParam, files, canFill, onFill, onReplace, canBatch, batchMode, onToggleBatch, onRefresh }: ToolbarProps) {
+export type EditorLayout = 'two' | 'three';
+
+export function EditorToolbar({ filter, setParam, files, canFill, onFill, onReplace, canBatch, batchMode, onToggleBatch, onRefresh, layout, onLayout, canThree }: ToolbarProps) {
   const t = useT();
   const [search, setSearch] = useState(filter.q);
   useEffect(() => setSearch(filter.q), [filter.q]);
@@ -117,6 +123,18 @@ export function EditorToolbar({ filter, setParam, files, canFill, onFill, onRepl
         )}
       </Space>
       <Space wrap size={8}>
+        <Tooltip title={canThree ? undefined : t('editor.layoutNarrow')}>
+          <Segmented
+            aria-label={t('editor.layout')}
+            disabled={!canThree}
+            value={canThree ? layout : 'two'}
+            onChange={(v) => onLayout(v as EditorLayout)}
+            options={[
+              { value: 'two', label: t('editor.layoutTwo'), icon: <PicCenterOutlined /> },
+              { value: 'three', label: t('editor.layoutThree'), icon: <LayoutOutlined /> },
+            ]}
+          />
+        </Tooltip>
         {canFill && (
           <Tooltip title={t('editor.fillTip')}>
             <Button icon={<ThunderboltOutlined />} onClick={onFill}>

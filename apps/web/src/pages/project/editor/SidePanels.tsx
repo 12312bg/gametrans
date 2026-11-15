@@ -131,7 +131,7 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
   );
 }
 
-export function ContextTab({ pid, entry, onJump }: { pid: string; entry: Entry; onJump: (id: string) => void }) {
+export function ContextTab({ pid, entry, onJump, docked }: { pid: string; entry: Entry; onJump: (id: string) => void; docked?: boolean }) {
   const t = useT();
   const scene = useScene(pid, entry.id);
   // 不在事件中的词条（数据库字段等）退回到前后相邻
@@ -142,7 +142,7 @@ export function ContextTab({ pid, entry, onJump }: { pid: string; entry: Entry; 
     enabled: !!scene.data && !scene.data.scene,
   });
   if (scene.isLoading || (scene.data && !scene.data.scene && q.isLoading)) return <Loading />;
-  if (scene.data?.scene) return <SceneView data={scene.data} onJump={onJump} />;
+  if (scene.data?.scene) return <SceneView data={scene.data} onJump={onJump} docked={docked} />;
   const row = (n: Pick<Neighbor, 'id' | 'original' | 'translation' | 'stage'>, current = false) => (
     <div key={n.id} className={`ctx-row${current ? ' current' : ''}`} onClick={() => !current && onJump(n.id)}>
       <StageDot stage={n.stage} />

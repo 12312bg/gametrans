@@ -1656,3 +1656,30 @@ button.scene-row {
   background: var(--brand-soft);
   color: var(--brand);
 }
+
+/* ---------- 文件列表：分页栏固定在屏幕底部 ---------- */
+.files-table-anchor {
+  scroll-margin-top: 80px;
+}
+.files-pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 -24px -24px;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.06);
+}
+@media (max-width: 640px) {
+  .files-pager {
+    margin: 0 -12px -12px;
+    padding: 8px 12px;
+  }
+}

@@ -21,7 +21,8 @@ interface Props {
   onPreview: (jobId: string) => void;
 }
 
-export function UploadCard({ existingPaths, onUploaded, onPreview }: Props) {
+/** bare：不带卡片外框（放在文件页的折叠面板中） */
+export function UploadCard({ existingPaths, onUploaded, onPreview, bare }: Props & { bare?: boolean }) {
   const t = useT();
   const { project } = useProject();
   const { site } = useAuth();
@@ -105,8 +106,10 @@ export function UploadCard({ existingPaths, onUploaded, onPreview }: Props) {
   const busy = uploadPct !== null || extracting !== null;
   const totalSize = pending.reduce((n, p) => n + p.file.size, 0);
 
+  const Wrap = bare ? 'div' : Card;
+  const wrapProps = bare ? {} : { variant: 'borderless' as const, title: t('upload.title') };
   return (
-    <Card variant="borderless" title={t('upload.title')}>
+    <Wrap {...wrapProps}>
       <Upload.Dragger
         multiple
         accept={[...exts, '.zip'].join(',')}
@@ -174,6 +177,6 @@ export function UploadCard({ existingPaths, onUploaded, onPreview }: Props) {
         </div>
       )}
       <Alert style={{ marginTop: 12 }} type="info" showIcon message={t('upload.notice')} />
-    </Card>
+    </Wrap>
   );
 }

@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Empty, Spin } from 'antd';
+import { MenuFoldOutlined } from '@ant-design/icons';
+import { App, Button, Empty, Spin, Tooltip } from 'antd';
 import { BATCH_ACTIONS, BATCH_ACTION_PERMISSION, BatchAction, PERMISSIONS, Stage } from '@gametrans/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -9,7 +10,9 @@ import { useEditors, useRealtime } from '../../../api/realtime';
 import type { Entry, FileItem, HistoryItem, Paged, Suggestion, Term } from '../../../api/types';
 import { useT } from '../../../i18n';
 import { errorMessage } from '../../../utils';
-import { BatchBar, EditorToolbar, EntryFilter } from './EditorToolbar';
+import { BatchBar, EditorLayout, EditorToolbar, EntryFilter } from './EditorToolbar';
+import { useScene } from './SceneView';
+import { ContextTab } from './SidePanels';
 import { EntryList, PAGE_SIZES } from './EntryList';
 import { EntryPanel, EntryPanelHandle, missingMarkup } from './EntryPanel';
 import { ReplaceModal } from './ReplaceModal';
@@ -17,6 +20,27 @@ import { IdenticalCounts, useAfterSave } from './useAfterSave';
 import { useShortcuts } from './useShortcuts';
 
 const SIZE_KEY = 'gt-editor-page-size';
+const LAYOUT_KEY = 'gt-editor-layout';
+/** 窗口宽度不足时三栏自动退回两栏 */
+const THREE_MIN_WIDTH = 1280;
+
+function savedLayout(): EditorLayout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'two' ? 'two' : 'three';
+  } catch {
+    return 'three';
+  }
+}
+
+function useWideEnough() {
+  const [wide, setWide] = useState(() => window.innerWidth >= THREE_MIN_WIDTH);
+  useEffect(() => {
+    const onResize = () => setWide(window.innerWidth >= THREE_MIN_WIDTH);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return wide;
+}
 
 function savedPageSize(): number {
   try {
@@ -53,6 +77,17 @@ export default function EditorPage() {
   const { remote, focus } = useRealtime();
   const editors = useEditors();
   const [sideTab, setSideTab] = useState('tm');
+  const [layout, setLayoutState] = useState<EditorLayout>(savedLayout);
+  const wide = useWideEnough();
+  const threeCol = layout === 'three' && wide;
+  const setLayout = (l: EditorLayout) => {
+    setLayoutState(l);
+    try {
+      localStorage.setItem(LAYOUT_KEY, l);
+    } catch {
+      /* 隐私模式下不可用 */
+    }
+  };
   const [batchMode, setBatchMode] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -328,6 +363,7 @@ export default function EditorPage() {
   };
 
   const editable = !!current && has(PERMISSIONS.TRANSLATE) && canEditStage(current.stage);
+  const contextTitle = useScene(pid, current?.id, threeCol).data?.scene?.title;
 
   // 上报正在编辑的词条，供其他成员看到
   const focusId = editable ? current.id : null;
@@ -414,13 +450,16 @@ export default function EditorPage() {
           setChecked(new Set());
         }}
         onRefresh={() => list.refetch()}
+        layout={layout}
+        onLayout={setLayout}
+        canThree={wide}
       />
       {replaceOpen && <ReplaceModal pid={pid} filter={filter} onClose={() => setReplaceOpen(false)} />}
       {batchMode && (
         <BatchBar actions={batchActions} pageIds={items.map((i) => i.id)} checked={checked} onChecked={setChecked} total={list.data?.total ?? 0} onRun={runBatch} />
       )}
 
-      <div className="editor-body">
+      <div className={`editor-body${threeCol ? ' three' : ''}`}>
         <EntryList
           items={items}
           total={list.data?.total}
@@ -462,6 +501,7 @@ export default function EditorPage() {
               editors={editors.get(current.id) ?? []}
               stale={staleInfo}
               onDiscardDraft={() => dropDraft(current.id)}
+              contextDocked={threeCol}
               onKeepDraft={() => {
                 bases.current[current.id] = current.version;
                 setDrafts((d) => ({ ...d }));
@@ -475,6 +515,20 @@ export default function EditorPage() {
             <Empty style={{ marginTop: 120 }} description={t('editor.pickEntry')} />
           )}
         </div>
+        {threeCol && (
+          <aside className="editor-context" aria-label={t('side.context')}>
+            <div className="editor-context-head">
+              <b>{t('side.context')}</b>
+              {contextTitle && <span className="muted small editor-context-title">{contextTitle}</span>}
+              <Tooltip title={t('editor.collapseContext')}>
+                <Button size="small" type="text" icon={<MenuFoldOutlined />} aria-label={t('editor.collapseContext')} onClick={() => setLayout('two')} />
+              </Tooltip>
+            </div>
+            <div className="editor-context-body">
+              {current ? <ContextTab pid={pid} entry={current} onJump={(id) => void jumpTo(id)} docked /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('editor.pickEntry')} />}
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

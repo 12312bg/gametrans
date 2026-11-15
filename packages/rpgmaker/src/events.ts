@@ -57,7 +57,7 @@ export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventLi
   const snapshot = list.slice();
   // 分支栈：每层记录分支头（选择 X 时、条件分支、否则…）的缩进，缩进回到该层或更外层时出栈
   const stack: { indent: number; step: BranchStep }[] = [];
-  const choicesAt = new Map<number, string[]>();
+  const choicesAt = new Map<number, { at: number; texts: string[] }>();
   const ifAt = new Map<number, IfInfo>();
   const ctx: WalkContext = {
     finalizers: outer.finalizers,
@@ -85,7 +85,7 @@ export function walkEventList<C>(list: C[], ad: CommandAdapter<C>, info: EventLi
     }
     if (code === 102) {
       const n = ad.arrLen(c, 0);
-      choicesAt.set(indent, Array.from({ length: n }, (_, k) => ad.arrStr(c, 0, k) ?? ''));
+      choicesAt.set(indent, { at: i, texts: Array.from({ length: n }, (_, k) => ad.arrStr(c, 0, k) ?? '') });
     }
 
     switch (code) {
@@ -318,11 +318,11 @@ const primitives = (vals: unknown[]) =>
   vals.map((v) => (typeof v === 'string' ? (v.length > 80 ? `${v.slice(0, 79)}…` : v) : typeof v === 'number' || typeof v === 'boolean' ? v : String(v ?? '')));
 
 /** 分支头指令 → 分支步骤；不是分支头时返回 undefined */
-function branchStep<C>(c: C, code: number, ad: CommandAdapter<C>, choices: string[] | undefined, lastIf: IfInfo | undefined): BranchStep | undefined {
+function branchStep<C>(c: C, code: number, ad: CommandAdapter<C>, choices: { at: number; texts: string[] } | undefined, lastIf: IfInfo | undefined): BranchStep | undefined {
   switch (code) {
     case 402: {
       const i = Number(ad.param(c, 0) ?? 0);
-      return { k: 'choice', i: i + 1, text: choices?.[i] ?? ad.str(c, 1) ?? '' };
+      return { k: 'choice', i: i + 1, text: choices?.texts[i] ?? ad.str(c, 1) ?? '', ...(choices ? { at: choices.at } : {}) };
     }
     case 403:
       return { k: 'cancel' };

@@ -65,7 +65,8 @@ export interface TermSnapshot {
  * - loop：循环
  */
 export type BranchStep =
-  | { k: 'choice'; i: number; text: string }
+  /** at：「显示选项」指令在列表中的下标（选项词条的键为 …/list/<at>/<序号>）；旧数据没有 */
+  | { k: 'choice'; i: number; text: string; at?: number }
   | { k: 'cancel' }
   | { k: 'if' | 'else'; type: number; args: (string | number | boolean)[] }
   | { k: 'battle'; result: 'win' | 'escape' | 'lose' }

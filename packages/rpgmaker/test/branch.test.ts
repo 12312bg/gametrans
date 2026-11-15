@@ -36,10 +36,10 @@ describe('事件分支路径', () => {
     const { entries } = extractEntries('data/Map001.json', mapWith(list), 'RMMV');
     const by = (s: string) => entries.find((e) => e.original === s)?.branch;
     expect(by('Hello')).toBeUndefined();
-    expect(by('Great')).toEqual([{ k: 'choice', i: 1, text: 'Accept' }]);
-    expect(by('Switch on')).toEqual([{ k: 'choice', i: 1, text: 'Accept' }, { k: 'if', type: 0, args: [12, 0] }]);
-    expect(by('Switch off')).toEqual([{ k: 'choice', i: 1, text: 'Accept' }, { k: 'else', type: 0, args: [12, 0] }]);
-    expect(by('Too bad')).toEqual([{ k: 'choice', i: 2, text: 'Refuse' }]);
+    expect(by('Great')).toEqual([{ k: 'choice', i: 1, text: 'Accept', at: 2 }]);
+    expect(by('Switch on')).toEqual([{ k: 'choice', i: 1, text: 'Accept', at: 2 }, { k: 'if', type: 0, args: [12, 0] }]);
+    expect(by('Switch off')).toEqual([{ k: 'choice', i: 1, text: 'Accept', at: 2 }, { k: 'else', type: 0, args: [12, 0] }]);
+    expect(by('Too bad')).toEqual([{ k: 'choice', i: 2, text: 'Refuse', at: 2 }]);
     expect(by('Bye')).toBeUndefined();
     // 选项本身不在分支内
     expect(entries.find((e) => e.original === 'Accept')?.branch).toBeUndefined();

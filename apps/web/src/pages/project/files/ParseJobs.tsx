@@ -59,10 +59,12 @@ function JobResult({ job }: { job: Job<ParseResultData> }) {
   );
 }
 
-export function ParseJobs({ jobs }: { jobs: Job<ParseResultData>[] }) {
+export function ParseJobs({ jobs, bare }: { jobs: Job<ParseResultData>[]; bare?: boolean }) {
   const t = useT();
+  const Wrap = bare ? 'div' : Card;
+  const wrapProps = bare ? {} : { variant: 'borderless' as const, title: t('jobs.title') };
   return (
-    <Card variant="borderless" title={t('jobs.title')}>
+    <Wrap {...wrapProps}>
       <List
         size="small"
         dataSource={jobs.slice(0, 5)}
@@ -91,6 +93,6 @@ export function ParseJobs({ jobs }: { jobs: Job<ParseResultData>[] }) {
           </List.Item>
         )}
       />
-    </Card>
+    </Wrap>
   );
 }

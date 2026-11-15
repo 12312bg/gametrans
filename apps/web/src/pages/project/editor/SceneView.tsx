@@ -1,12 +1,13 @@
-import { ApartmentOutlined, UserOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { ApartmentOutlined, BranchesOutlined, UserOutlined } from '@ant-design/icons';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Tag, Tooltip, Typography } from 'antd';
 import type { BranchStep, Stage } from '@gametrans/shared';
-import { Fragment, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../api/client';
 import { StageDot } from '../../../components/Tags';
 import { TFn, useT } from '../../../i18n';
 import { CodesOnly } from './highlight';
+import { ChoiceGroup, buildScene, selectionFor } from './sceneModel';
 
 export interface SceneItem {
   id: string;
@@ -26,11 +27,14 @@ export interface SceneData {
   items: SceneItem[];
 }
 
-export function useScene(pid: string, entryId: string) {
+export function useScene(pid: string, entryId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['scene', entryId],
     queryFn: () => api<SceneData>(`/projects/${pid}/entries/${entryId}/scene`),
     staleTime: 30_000,
+    enabled: enabled && !!entryId,
+    // 切换词条时保留上一段事件，避免右栏闪烁、丢失手动选择的选项分支
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -82,69 +86,133 @@ export function branchText(s: BranchStep, t: TFn): string {
   }
 }
 
-const same = (a: BranchStep[] | null, b: BranchStep[] | null) => JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
-
-/** 整段事件：按分支缩进显示，分支变化处插入分支标题 */
-export function SceneView({ data, onJump }: { data: SceneData; onJump: (id: string) => void }) {
+/** 一条词条行：点击跳转（当前词条不可点） */
+function SceneRow({ it, depth, onJump }: { it: SceneItem; depth: number; onJump: (id: string) => void }) {
   const t = useT();
-  const currentRef = useRef<HTMLDivElement>(null);
-  const curId = data.items.find((i) => i.current)?.id;
+  const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    currentRef.current?.scrollIntoView({ block: 'center' });
-  }, [curId]);
-
-  let prev: BranchStep[] | null = null;
+    if (it.current) ref.current?.scrollIntoView({ block: 'center' });
+  }, [it.current]);
   return (
-    <div className="scene">
-      <div className="scene-title">
-        <Typography.Text strong>{data.scene!.title}</Typography.Text>
-        <span className="muted small">{t('scene.count', { count: data.items.length })}</span>
+    <button
+      type="button"
+      ref={ref}
+      className={`scene-row${it.current ? ' current' : ''}${it.stage === 'HIDDEN' ? ' hidden' : ''}`}
+      style={{ marginLeft: depth * 16, width: `calc(100% - ${depth * 16}px)` }}
+      onClick={() => !it.current && onJump(it.id)}
+    >
+      <StageDot stage={it.stage} />
+      <div className="ctx-text">
+        <div className="scene-meta">
+          <span className="muted small">{t(`category.${it.category}`)}</span>
+          {it.speaker && (
+            <Tooltip title={it.speaker.face ? t('scene.face', { face: it.speaker.face }) : undefined}>
+              <Tag bordered={false} icon={<UserOutlined />} className="scene-speaker">
+                {it.speaker.name ?? it.speaker.face}
+              </Tag>
+            </Tooltip>
+          )}
+        </div>
+        <div className="pre-wrap">
+          <CodesOnly text={it.original} />
+        </div>
+        {it.translation && (
+          <div className="pre-wrap muted">
+            <CodesOnly text={it.translation} />
+          </div>
+        )}
       </div>
-      <div className="scene-list">
-        {data.items.map((it) => {
-          const path = it.branch ?? [];
-          // 与上一条相比，从第一个不同的层级开始显示分支标题
-          let common = 0;
-          const before = prev ?? [];
-          while (common < path.length && common < before.length && JSON.stringify(path[common]) === JSON.stringify(before[common])) common++;
-          const heads = same(prev, it.branch) ? [] : path.slice(common).map((s, d) => ({ s, depth: common + d }));
-          prev = it.branch;
+    </button>
+  );
+}
+
+/** 一组选项：点选项文字跳转翻译，点右侧按钮切换下方显示的分支 */
+function ChoiceBlock({ group, selected, onPick, onJump }: { group: ChoiceGroup<SceneItem>; selected: number; onPick: (i: number) => void; onJump: (id: string) => void }) {
+  const t = useT();
+  return (
+    <div className="scene-choices" style={{ marginLeft: group.depth * 16 }}>
+      <div className="scene-choices-hint">{t('scene.choicesHint', { count: group.options.length })}</div>
+      <div role="radiogroup" aria-label={t('scene.choicesLabel')}>
+        {group.options.map(({ i, entry }) => {
+          const on = i === selected;
           return (
-            <Fragment key={it.id}>
-              {heads.map(({ s, depth }) => (
-                <div key={`${it.id}-h${depth}`} className="scene-branch" style={{ marginLeft: depth * 16 }}>
-                  <ApartmentOutlined /> {branchText(s, t)}
-                </div>
-              ))}
-              <div
-                ref={it.current ? currentRef : undefined}
-                className={`scene-row${it.current ? ' current' : ''}${it.stage === 'HIDDEN' ? ' hidden' : ''}`}
-                style={{ marginLeft: path.length * 16 }}
-                onClick={() => !it.current && onJump(it.id)}
-              >
-                <StageDot stage={it.stage} />
-                <div className="ctx-text">
-                  <div className="scene-meta">
-                    <span className="muted small">{t(`category.${it.category}`)}</span>
-                    {it.speaker && (
-                      <Tooltip title={it.speaker.face ? t('scene.face', { face: it.speaker.face }) : undefined}>
-                        <Tag bordered={false} icon={<UserOutlined />} className="scene-speaker">
-                          {it.speaker.name ?? it.speaker.face}
-                        </Tag>
-                      </Tooltip>
-                    )}
-                  </div>
-                  <div className="pre-wrap">
-                    <CodesOnly text={it.original} />
-                  </div>
-                  {it.translation && (
-                    <div className="pre-wrap muted">
-                      <CodesOnly text={it.translation} />
-                    </div>
+            <div key={entry.id} className={`scene-choice${entry.current ? ' current' : ''}`}>
+              <button type="button" className="scene-choice-text" onClick={() => !entry.current && onJump(entry.id)}>
+                <StageDot stage={entry.stage} />
+                <span className="muted small">{t('scene.option', { i })}</span>
+                <span className="ctx-text">
+                  <span className="pre-wrap">
+                    <CodesOnly text={entry.original} />
+                  </span>
+                  {entry.translation && (
+                    <span className="pre-wrap muted scene-choice-dst">
+                      <CodesOnly text={entry.translation} />
+                    </span>
                   )}
-                </div>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={t('scene.viewBranchOf', { i })}
+                className={`scene-branch-toggle${on ? ' on' : ''}`}
+                onClick={() => onPick(i)}
+              >
+                <BranchesOutlined /> {t(on ? 'scene.viewing' : 'scene.viewBranch')}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 整段事件：按分支缩进显示；同一组选项只显示所选选项之后的对话，
+ * 当前词条所在的选项分支自动选中。docked 时占满右栏高度。
+ */
+export function SceneView({ data, onJump, docked }: { data: SceneData; onJump: (id: string) => void; docked?: boolean }) {
+  const t = useT();
+  const [selected, setSelected] = useState<Record<string, number>>({});
+  const curId = data.items.find((i) => i.current)?.id;
+  // 不同文件可能有相同的键前缀（如各地图的 events/1/pages/0/list/），连同文件一起比较
+  const prefix = data.scene ? `${data.scene.fileId}:${data.scene.prefix}` : undefined;
+  const lastPrefix = useRef(prefix);
+  // 切换到当前词条所在的选项分支；同一段事件内手动选择的其他分组保留，换到另一段事件时重置
+  useEffect(() => {
+    const same = lastPrefix.current === prefix;
+    lastPrefix.current = prefix;
+    setSelected((s) => ({ ...(same ? s : {}), ...(curId ? selectionFor(data.items, curId) : {}) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curId, prefix]);
+  const nodes = useMemo(() => buildScene(data.items, selected), [data.items, selected]);
+
+  return (
+    <div className={`scene${docked ? ' docked' : ''}`}>
+      {!docked && (
+        <div className="scene-title">
+          <Typography.Text strong>{data.scene!.title}</Typography.Text>
+          <span className="muted small">{t('scene.count', { count: data.items.length })}</span>
+        </div>
+      )}
+      <div className="scene-list">
+        {nodes.map((n, idx) => {
+          if (n.type === 'row') return <SceneRow key={n.entry.id} it={n.entry} depth={n.depth} onJump={onJump} />;
+          if (n.type === 'head')
+            return (
+              <div key={`h-${idx}`} className="scene-branch" style={{ marginLeft: n.depth * 16 }}>
+                <ApartmentOutlined /> {branchText(n.step, t)}
               </div>
-            </Fragment>
+            );
+          if (n.type === 'choices')
+            return <ChoiceBlock key={`c-${n.group.id}`} group={n.group} selected={n.selected} onPick={(i) => setSelected((s) => ({ ...s, [n.group.id]: i }))} onJump={onJump} />;
+          return (
+            <div key={`p-${n.group.id}`} className="scene-picked" style={{ marginLeft: n.depth * 16 }}>
+              <span className="scene-picked-pill">{t('scene.afterChoice', { text: n.text })}</span>
+              {n.hidden > 0 && <span className="muted small">{t('scene.hiddenOther', { count: n.hidden })}</span>}
+            </div>
           );
         })}
       </div>

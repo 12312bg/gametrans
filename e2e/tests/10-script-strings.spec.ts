@@ -1,5 +1,5 @@
 import { unzipSync } from 'fflate';
-import { TestUser, addMember, btn, createUser, expect, openEditor, seedProject, stageTag, test, textarea, toast, useAs } from './helpers';
+import { TestUser, addMember, btn, parseJobsDrawer, createUser, expect, openEditor, seedProject, stageTag, test, textarea, toast, useAs } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -82,7 +82,7 @@ test('重新提取：保留已有译文，任务带「重新提取」标记', as
   await btn(page, '重新提取').click();
   await btn(page.locator('.ant-popconfirm'), '确定').click();
   await expect(toast(page, '已开始重新提取')).toBeVisible();
-  const job = page.locator('.ant-list-item').filter({ hasText: '重新提取' }).first();
+  const job = (await parseJobsDrawer(page)).locator('.ant-list-item').filter({ hasText: '重新提取' }).first();
   await expect(job.locator('.job-result')).toContainText('未变化 7', { timeout: 30_000 });
   const { items } = await owner.api.ok('GET', `/projects/${pid}/entries?category=script`);
   expect(items.map((e: { translation: string }) => e.translation)).toEqual(['一般', '普通']);

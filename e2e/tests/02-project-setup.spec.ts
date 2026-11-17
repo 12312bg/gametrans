@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FIX, TestUser, btn, createUser, expect, loginUI, mzZip, pageAs, pickOption, test, toast, uid } from './helpers';
+import { FIX, TestUser, btn, latestJobResult, createUser, expect, loginUI, mzZip, pageAs, pickOption, test, toast, uid } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -48,7 +48,7 @@ test('上传游戏目录 zip，后台解析后展示文件与进度', async ({ p
   await expect(page.locator('.pending-head')).toContainText('待上传 7 个文件');
   await btn(page, '开始上传').click();
   await expect(toast(page, '上传完成，正在后台解析')).toBeVisible();
-  const job = page.locator('.job-result').first();
+  const job = await latestJobResult(page);
   await expect(job).toContainText('新增文件 7', { timeout: 30_000 });
   await expect(job).not.toContainText('失败');
   for (const path of ['data/Map001.json', 'data/System.json', 'js/plugins.js']) {

@@ -18,6 +18,7 @@ import {
   textarea,
   toast,
   useAs,
+  latestJobResult,
 } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -74,7 +75,7 @@ test('上传新版本文件：保留译文，原文变化的词条标记为有�
   await expect(dialog.locator('.preview-before')).toHaveText('またね');
   await btn(dialog, '确认导入').click();
   await expect(toast(page, '已确认，正在后台导入')).toBeVisible();
-  const job = page.locator('.job-result').first();
+  const job = await latestJobResult(page);
   await expect(job).toContainText('更新 1', { timeout: 30_000 });
   await expect(job).toContainText('原文变更 1');
 

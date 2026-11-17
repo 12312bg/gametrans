@@ -238,3 +238,17 @@ export async function useAs(page: Page, user: TestUser) {
 export const activeItem = (page: Page) => page.locator('.entry-item.active');
 export const stageTag = (page: Page) => page.locator('.entry-meta .ant-tag').first();
 export const textarea = (page: Page) => page.locator('.translation-input');
+
+/**
+ * 文件页的「上传游戏数据与解析任务」抽屉（解析任务结果显示在其中）。
+ * 抽屉未打开时点击工具栏的「解析任务 / 解析中 N%」按钮打开。
+ */
+export async function parseJobsDrawer(page: Page) {
+  const drawer = page.locator('.ant-drawer-content').filter({ hasText: '上传游戏数据与解析任务' });
+  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^(解析任务|解析中 \d+%)$/ }).click();
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
+/** 最新一个解析任务的结果摘要 */
+export const latestJobResult = async (page: Page) => (await parseJobsDrawer(page)).locator('.job-result').first();

@@ -1,4 +1,4 @@
-import type { ContextPart, Engine, EntryCategory, Issue, JobStatus, Params, Permission, ProjectRole, Stage, TermHistoryAction, TermSnapshot } from '@gametrans/shared';
+import type { ContextPart, Engine, EntryCategory, FuzzyKind, Issue, JobStatus, Params, Permission, ProjectRole, Stage, TermHistoryAction, TermSnapshot } from '@gametrans/shared';
 
 export interface UserBrief {
   id: string;
@@ -104,7 +104,11 @@ export interface Suggestion {
   translation: string;
   stage: Stage;
   path: string;
+  /** 编辑相似度 0~1 */
   score: number;
+  /** 排序综合分 0~1 */
+  rank: number;
+  kind: FuzzyKind;
 }
 
 export interface Neighbor {

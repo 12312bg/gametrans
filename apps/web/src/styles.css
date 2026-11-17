@@ -813,6 +813,16 @@ html[data-theme='dark'] .qa-item.warning {
   font-size: 14px;
   margin-top: 2px;
 }
+.tm-diff {
+  background: rgba(250, 140, 22, 0.16);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+  box-shadow: inset 0 -1px 0 rgba(250, 140, 22, 0.55);
+}
+.tm-kind {
+  margin-inline-end: 0;
+}
 .history-text {
   margin-top: 4px;
   font-size: 13px;

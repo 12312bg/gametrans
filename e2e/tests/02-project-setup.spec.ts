@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FIX, TestUser, btn, latestJobResult, createUser, expect, loginUI, mzZip, pageAs, pickOption, test, toast, uid } from './helpers';
+import { FIX, TestUser, btn, latestJobResult, uploadInput, createUser, expect, loginUI, mzZip, pageAs, pickOption, test, toast, uid } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -58,7 +58,7 @@ test('上传游戏目录 zip，后台解析后展示文件与进度', async ({ p
 
   // 再次上传已有的文件 → 先预览；内容相同时没有可导入的变化，取消后丢弃
   const items = readFileSync(join(FIX, 'mz', 'Items.json'));
-  await page.locator('.ant-upload-drag input[type=file]').setInputFiles({ name: 'Items.json', mimeType: 'application/json', buffer: items });
+  await (await uploadInput(page)).setInputFiles({ name: 'Items.json', mimeType: 'application/json', buffer: items });
   await btn(page, '开始上传').click();
   const dialog = page.getByRole('dialog').filter({ hasText: '导入前确认变更' });
   await expect(dialog).toContainText('与已有文件相比没有变化', { timeout: 30_000 });

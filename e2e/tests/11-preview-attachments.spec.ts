@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FIX, TestUser, addMember, btn, latestJobResult, createUser, expect, mzZip, seedProject, test, toast, useAs } from './helpers';
+import { FIX, TestUser, addMember, btn, latestJobResult, uploadInput, createUser, expect, mzZip, seedProject, test, toast, useAs } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -38,7 +38,7 @@ test.beforeAll(async () => {
 test('上传新版本：预览将删除的已有译文，取消后不变，确认后才导入', async ({ page }) => {
   await useAs(page, owner);
   await page.goto(`/projects/${pid}/files`);
-  const input = page.locator('.ant-upload-drag input[type=file]').first();
+  const input = await uploadInput(page);
   await input.setInputFiles({ name: 'Map001.json', mimeType: 'application/json', buffer: newVersion() });
   await btn(page, '开始上传').click();
   const dialog = dialogOf(page);

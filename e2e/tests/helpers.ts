@@ -252,3 +252,14 @@ export async function parseJobsDrawer(page: Page) {
 
 /** 最新一个解析任务的结果摘要 */
 export const latestJobResult = async (page: Page) => (await parseJobsDrawer(page)).locator('.job-result').first();
+
+/**
+ * 文件页的上传区域 input：项目还没有文件时直接显示在页面上，
+ * 已有文件时收在抽屉里，需要先点击工具栏的「上传」打开。
+ */
+export async function uploadInput(page: Page) {
+  const drag = page.locator('.ant-upload-drag').first();
+  if (!(await drag.isVisible())) await btn(page, '上传').click();
+  await expect(drag).toBeVisible();
+  return drag.locator('input[type=file]');
+}

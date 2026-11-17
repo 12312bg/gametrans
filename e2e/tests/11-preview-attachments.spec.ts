@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FIX, TestUser, addMember, btn, createUser, expect, mzZip, seedProject, test, toast, useAs } from './helpers';
+import { FIX, TestUser, addMember, btn, latestJobResult, uploadInput, createUser, expect, mzZip, seedProject, test, toast, useAs } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -38,7 +38,7 @@ test.beforeAll(async () => {
 test('上传新版本：预览将删除的已有译文，取消后不变，确认后才导入', async ({ page }) => {
   await useAs(page, owner);
   await page.goto(`/projects/${pid}/files`);
-  const input = page.locator('.ant-upload-drag input[type=file]').first();
+  const input = await uploadInput(page);
   await input.setInputFiles({ name: 'Map001.json', mimeType: 'application/json', buffer: newVersion() });
   await btn(page, '开始上传').click();
   const dialog = dialogOf(page);
@@ -57,7 +57,7 @@ test('上传新版本：预览将删除的已有译文，取消后不变，确�
   await expect(dialog).toContainText('删除 1 条', { timeout: 30_000 });
   await btn(dialog, '确认导入').click();
   await expect(toast(page, '已确认，正在后台导入')).toBeVisible();
-  const job = page.locator('.job-result').first();
+  const job = await latestJobResult(page);
   await expect(job).toContainText('移除词条 1', { timeout: 30_000 });
   await expect(job).toContainText('原文变更 1');
   await expect(owner.api.findEntry(pid, 'またね')).rejects.toThrow();

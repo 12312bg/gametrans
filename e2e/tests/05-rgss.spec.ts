@@ -18,6 +18,7 @@ import {
   textarea,
   toast,
   useAs,
+  latestJobResult,
 } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -58,7 +59,7 @@ test('VX Ace：选择游戏文件夹上传，自动过滤非数据文件', async
   await expect(toast(page, '已忽略 2 个不支持的文件')).toBeVisible();
   await expect(page.locator('.pending-head')).toContainText('待上传 5 个文件');
   await btn(page, '开始上传').click();
-  await expect(page.locator('.job-result').first()).toContainText('新增文件 5', { timeout: 30_000 });
+  await expect(await latestJobResult(page)).toContainText('新增文件 5', { timeout: 30_000 });
   for (const n of ['Map001', 'Scripts', 'System']) {
     await expect(page.getByRole('row').filter({ hasText: `Data/${n}.rvdata2` })).toBeVisible();
   }
@@ -141,7 +142,7 @@ test('XP：单文件上传，拒绝其他引擎的文件；XP 的「显示文章
   ]);
   await expect(page.locator('.pending-head')).toContainText('待上传 2 个文件');
   await btn(page, '开始上传').click();
-  await expect(page.locator('.job-result').first()).toContainText('新增文件 2', { timeout: 30_000 });
+  await expect(await latestJobResult(page)).toContainText('新增文件 2', { timeout: 30_000 });
   await openEditor(page, xp.id, 'category=dialogue');
   await expect(page.locator('.original-text')).toHaveText('共通イベントの台詞');
   await page.keyboard.press('Alt+ArrowDown');

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
-import { FIX, PASSWORD, TestUser, btn, createUser, expect, seedProject, test, toast, uid, useAs } from './helpers';
+import { FIX, PASSWORD, TestUser, btn, createUser, latestJobResult, uploadInput, expect, seedProject, test, toast, uid, useAs } from './helpers';
 
 /** E2E 服务端把上传上限设为 64 MB（见 scripts/start-server.mjs） */
 const LIMIT_MB = 64;
@@ -131,7 +131,7 @@ test('游戏 zip 在浏览器中解压：超过上传上限的压缩包也只上
   });
   await btn(page, '开始上传').click();
   await expect(toast(page, '上传完成，正在后台解析')).toBeVisible();
-  await expect(page.locator('.job-result').first()).toContainText('新增文件 7', { timeout: 30_000 });
+  await expect(await latestJobResult(page)).toContainText('新增文件 7', { timeout: 30_000 });
   expect(sizes).toHaveLength(1);
   expect(sizes[0]).toBeLessThan(2 * MB);
 });
@@ -142,7 +142,7 @@ test('超过上传上限：浏览器提前提示，服务端返回 413 与 FILE_
 
   await useAs(page, owner);
   await page.goto(`/projects/${pid}/files`);
-  await page.locator('.ant-upload-drag input[type=file]').setInputFiles(big);
+  await (await uploadInput(page)).setInputFiles(big);
   await expect(toast(page, `Map099.json: 文件超过 ${LIMIT_MB} MB 的上传上限`)).toBeVisible();
   await expect(toast(page, '选择游戏文件夹')).toBeVisible();
   await expect(page.locator('.pending-upload')).toHaveCount(0);

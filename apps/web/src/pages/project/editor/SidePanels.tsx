@@ -1,7 +1,7 @@
 import { RollbackOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Empty, List, Popconfirm, Space, Spin, Tag, Tooltip, Typography } from 'antd';
-import { LINKED_CATEGORIES, hasMessage } from '@gametrans/shared';
+import { LINKED_CATEGORIES, diffSegments, hasMessage } from '@gametrans/shared';
 import { api } from '../../../api/client';
 import type { Entry, HistoryItem, Neighbor, Suggestion, Term } from '../../../api/types';
 import { StageDot, StageTag, UserAvatar } from '../../../components/Tags';
@@ -110,15 +110,22 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
             }
           >
             <div className="tm-row">
-              <Space size={6}>
-                <Tag color={pct >= 100 ? 'green' : pct >= 70 ? 'blue' : 'default'} bordered={false}>
-                  {pct}%
-                </Tag>
+              <Space size={6} wrap>
+                <Tooltip title={s.kind === 'exact' ? undefined : t('side.tmScoreTip', { pct })}>
+                  <Tag color={pct >= 100 ? 'green' : pct >= 70 ? 'blue' : 'default'} bordered={false}>
+                    {pct}%
+                  </Tag>
+                </Tooltip>
+                {(s.kind === 'contains' || s.kind === 'contained' || s.kind === 'partial') && (
+                  <Tag color="purple" bordered={false} className="tm-kind">
+                    {t(`side.tmKind.${s.kind}`)}
+                  </Tag>
+                )}
                 <StageDot stage={s.stage} />
                 <span className="muted small">{s.path}</span>
               </Space>
               <div className="tm-src pre-wrap">
-                <CodesOnly text={s.original} />
+                {s.kind === 'exact' ? <CodesOnly text={s.original} /> : <TMDiff source={entry.original} candidate={s.original} />}
               </div>
               <div className="tm-dst pre-wrap">
                 <CodesOnly text={s.translation} />
@@ -128,6 +135,25 @@ export function TMTab({ pid, entry, onUse, canEdit }: { pid: string; entry: Entr
         );
       }}
     />
+  );
+}
+
+/** 候选原文：与当前原文不同的部分高亮显示 */
+function TMDiff({ source, candidate }: { source: string; candidate: string }) {
+  const t = useT();
+  const segs = diffSegments(source, candidate);
+  return (
+    <span title={t('side.tmDiffTip')}>
+      {segs.map((g, i) =>
+        g.same ? (
+          <CodesOnly key={i} text={g.text} />
+        ) : (
+          <mark key={i} className="tm-diff">
+            <CodesOnly text={g.text} />
+          </mark>
+        ),
+      )}
+    </span>
   );
 }
 

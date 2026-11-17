@@ -19,6 +19,7 @@ import {
   hasMissingMarkup,
   MarkupReport,
   replaceWithSegments,
+  fuzzyMatch,
 } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -667,29 +668,50 @@ export class EntriesService {
     return { affected, skipped: skipped + (changes.length - affected), occurrences };
   }
 
-  /** 翻译记忆：按原文三元组相似度推荐项目内已有译文 */
+  /**
+   * 翻译记忆：推荐项目内原文相似的已有译文。
+   * 1) pg_trgm 走 GIN 索引召回候选：整体相似（%），或当前原文与候选中的某一段相似（%>，覆盖「中间部分相同」「候选包含当前原文」）；
+   *    「候选是当前原文中的一小段」无法走索引，仅在整体相似度达标时召回（短词请用术语表）；
+   * 2) 用字符级编辑距离 + 最长公共子串重新打分排序（见 shared/fuzzy.ts）。
+   */
   async suggestions(projectId: string, id: string) {
     const e = await this.get(projectId, id);
-    const rows = await this.prisma.$queryRaw<
-      { id: string; original: string; translation: string; stage: string; path: string; score: number }[]
-    >`
-      SELECT e.id, e.original, e.translation, e.stage::text AS stage, f.path, similarity(e.original, ${e.original})::float AS score
-      FROM "Entry" e JOIN "File" f ON f.id = e."fileId"
-      WHERE e."projectId" = ${projectId}
-        AND e.id <> ${id}
-        AND e.translation <> ''
-        AND e.stage <> 'HIDDEN'
-        AND e.original % ${e.original}
-      ORDER BY score DESC, e."updatedAt" DESC
-      LIMIT 8`;
+    if (!e.original.trim()) return [];
+    type Row = { id: string; original: string; translation: string; stage: string; path: string; updatedAt: Date };
+    const rows = await this.prisma.$transaction(async (tx) => {
+      // 默认阈值（0.3 / 0.6）只能召回长度接近、开头相同的文本，这里放宽召回，由下面的重排把关
+      await tx.$queryRaw`SELECT set_config('pg_trgm.similarity_threshold', '0.2', true), set_config('pg_trgm.word_similarity_threshold', '0.3', true)`;
+      return tx.$queryRaw<Row[]>`
+        SELECT e.id, e.original, e.translation, e.stage::text AS stage, f.path, e."updatedAt"
+        FROM "Entry" e JOIN "File" f ON f.id = e."fileId"
+        WHERE e."projectId" = ${projectId}
+          AND e.id <> ${id}
+          AND e.translation <> ''
+          AND e.stage <> 'HIDDEN'
+          AND (e.original % ${e.original} OR e.original %> ${e.original})
+        ORDER BY greatest(similarity(e.original, ${e.original}), word_similarity(${e.original}, e.original)) DESC,
+                 e."updatedAt" DESC
+        LIMIT 150`;
+    });
+    const stageWeight = (s: string) => (s === 'REVIEWED' || s === 'LOCKED' ? 1 : 0);
+    const scored = rows
+      .map((r) => ({ r, m: fuzzyMatch(e.original, r.original) }))
+      .filter(({ m }) => m.rank >= 0.3)
+      .sort(
+        (x, y) =>
+          y.m.rank - x.m.rank || stageWeight(y.r.stage) - stageWeight(x.r.stage) || y.r.updatedAt.getTime() - x.r.updatedAt.getTime(),
+      );
     // 合并重复译文，保留最高分
     const seen = new Set<string>();
-    return rows.filter((r) => {
+    const out: { id: string; original: string; translation: string; stage: string; path: string; score: number; rank: number; kind: string }[] = [];
+    for (const { r, m } of scored) {
       const k = `${r.original}\u0000${r.translation}`;
-      if (seen.has(k)) return false;
+      if (seen.has(k)) continue;
       seen.add(k);
-      return true;
-    });
+      out.push({ id: r.id, original: r.original, translation: r.translation, stage: r.stage, path: r.path, score: m.score, rank: m.rank, kind: m.kind });
+      if (out.length >= 10) break;
+    }
+    return out;
   }
 
   /**

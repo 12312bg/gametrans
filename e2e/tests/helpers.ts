@@ -238,3 +238,31 @@ export async function useAs(page: Page, user: TestUser) {
 export const activeItem = (page: Page) => page.locator('.entry-item.active');
 export const stageTag = (page: Page) => page.locator('.entry-meta .ant-tag').first();
 export const textarea = (page: Page) => page.locator('.translation-input');
+
+/**
+ * 文件页的「上传游戏数据与解析任务」抽屉（解析任务结果显示在其中）。
+ * 抽屉未打开时点击工具栏的「解析任务 / 解析中 N%」按钮打开。
+ */
+export async function parseJobsDrawer(page: Page) {
+  const drawer = page.locator('.ant-drawer-content').filter({ hasText: '上传游戏数据与解析任务' });
+  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^(解析任务|解析中 \d+%)$/ }).click();
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
+
+/** 最新一个解析任务的结果摘要 */
+export const latestJobResult = async (page: Page) => (await parseJobsDrawer(page)).locator('.job-result').first();
+
+/**
+ * 文件页的上传区域 input：项目还没有文件时直接显示在页面上，
+ * 已有文件时收在抽屉里，需要先点击工具栏的「上传」打开。
+ */
+export async function uploadInput(page: Page) {
+  const drag = page.locator('.ant-upload-drag').first();
+  if (!(await drag.isVisible())) await btn(page, '上传').click();
+  await expect(drag).toBeVisible();
+  return drag.locator('input[type=file]');
+}
+
+/** 保存 / 审核时若有原文完全相同的其他词条，会询问是否一并应用：选择「只改这一条」 */
+export const onlyThisEntry = (page: Page) => btn(page.locator('.ant-modal').filter({ hasText: '原文完全相同的词条' }), '只改这一条').click();

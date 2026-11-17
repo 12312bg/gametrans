@@ -263,11 +263,14 @@ test('并发编辑冲突：覆盖或采用对方版本', async ({ page, browser,
   await openEditor(page, pid, q('またね'));
   await openEditor(rp, pid, q('またね'));
 
+  // 冲突场景：自己有未保存的草稿时，对方先保存了（没有草稿时编辑器会实时同步到最新版本，不会冲突）
+  await textarea(page).fill('翻译员的版本');
   await textarea(rp).fill('审核员的版本');
   await rp.keyboard.press('Control+KeyS');
   await expect(stageTag(rp)).toHaveText('已翻译');
+  // 审核员先写好下一版草稿，稍后翻译员覆盖时它就持有旧版本
+  await textarea(rp).fill('再改一次');
 
-  await textarea(page).fill('翻译员的版本');
   await page.keyboard.press('Control+KeyS');
   const modal = confirmDialog(page);
   await expect(modal).toContainText('该词条已被其他成员修改');
@@ -277,8 +280,8 @@ test('并发编辑冲突：覆盖或采用对方版本', async ({ page, browser,
   await expect(activeItem(page).locator('.entry-item-dst')).toHaveText('翻译员的版本');
   expect((await translator.api.findEntry(pid, 'またね')).translation).toBe('翻译员的版本');
 
-  // 审核员此时持有旧版本，再次保存 → 选择采用对方版本
-  await textarea(rp).fill('再改一次');
+  // 审核员此时持有旧版本，保存 → 选择采用对方版本
+  await expect(textarea(rp)).toHaveValue('再改一次');
   await rp.keyboard.press('Control+KeyS');
   await btn(confirmDialog(rp), '使用对方版本').click();
   await expect(textarea(rp)).toHaveValue('翻译员的版本');
@@ -288,11 +291,11 @@ test('并发编辑冲突：覆盖或采用对方版本', async ({ page, browser,
 test('上下文面板：显示前后词条并可跳转', async ({ page }) => {
   await useAs(page, translator);
   await openEditor(page, pid, q('ありがとう！'));
-  await page.getByRole('tab', { name: '上下文' }).click();
-  const ctx = page.locator('.ctx-row');
-  await expect(ctx.filter({ hasText: 'はい' }).first()).toBeVisible();
-  await expect(page.locator('.ctx-row.current')).toContainText('ありがとう！');
-  await ctx.filter({ hasText: '遠い昔……' }).click();
+  // 宽屏默认三栏：上下文常驻右栏，事件内的词条按场景（含选项分支）展示
+  const ctx = page.getByRole('complementary', { name: '上下文' });
+  await expect(ctx.locator('.scene-choice').filter({ hasText: 'はい' })).toBeVisible();
+  await expect(ctx.locator('.scene-row.current')).toContainText('ありがとう！');
+  await ctx.locator('.scene-row').filter({ hasText: '遠い昔……' }).click();
   await expect(page.locator('.original-text')).toHaveText('遠い昔……');
   await expect(page).toHaveURL(/entry=/);
 });

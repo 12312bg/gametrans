@@ -17,6 +17,7 @@ import {
   tmCommonEvents,
   toast,
   useAs,
+  onlyThisEntry,
 } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -70,7 +71,7 @@ test('翻译记忆：相似推荐「使用」、Alt+1 快捷键、草稿保留',
   await textarea(page).fill(SWORD);
   await page.keyboard.press('Control+Enter');
   // 第三条原文完全相同，会询问是否一并应用：只改这一条，留给后面的 100% 推荐与批量填充
-  await btn(page.locator('.ant-modal').filter({ hasText: '原文完全相同的词条' }), '只改这一条').click();
+  await onlyThisEntry(page);
   // 自动跳到下一条（盾），翻译记忆推荐「剑」的译文
   await expect(activeItem(page)).toContainText(TM_TEXTS[1]);
   const tm = page.locator('.tm-row').first();
@@ -124,6 +125,7 @@ test('审核员：审核通过后翻译员不能再修改', async ({ page, brows
   await openEditor(page, pid, q('勇者は伝説の剣を手に入れた！'));
   await expect(page.locator('.entry-item')).toHaveCount(2);
   await page.keyboard.press('Control+Shift+Enter');
+  await onlyThisEntry(page);
   await expect(page.locator('.entry-item').first().locator('.stage-dot')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
   await expect(page.locator('.entry-item').nth(1)).toHaveClass(/active/);
 

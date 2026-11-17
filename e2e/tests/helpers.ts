@@ -263,3 +263,6 @@ export async function uploadInput(page: Page) {
   await expect(drag).toBeVisible();
   return drag.locator('input[type=file]');
 }
+
+/** 保存 / 审核时若有原文完全相同的其他词条，会询问是否一并应用：选择「只改这一条」 */
+export const onlyThisEntry = (page: Page) => btn(page.locator('.ant-modal').filter({ hasText: '原文完全相同的词条' }), '只改这一条').click();

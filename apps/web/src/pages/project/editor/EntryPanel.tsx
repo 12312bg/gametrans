@@ -70,8 +70,8 @@ const DANGER_HINT: Record<string, string> = {
 const uniq = (a: string[]) => [...new Set(a)];
 
 /** 译文中缺失的控制符、%1 占位符与插件标签（去重）；译文为空时不检查 */
-export function missingMarkup(entry: Pick<Entry, 'original' | 'category'>, draft: string): { codes: string[]; tags: string[] } {
-  const r = checkMarkup(entry.original, draft, entry.category);
+export function missingMarkup(entry: Pick<Entry, 'original' | 'category'>, draft: string, engine?: Engine): { codes: string[]; tags: string[] } {
+  const r = checkMarkup(entry.original, draft, entry.category, engine);
   return { codes: uniq([...r.missingCodes, ...r.missingPlaceholders]), tags: uniq(r.missingTags) };
 }
 
@@ -83,13 +83,13 @@ interface QaItem {
 /** 译文质量检查：控制符、行数、首尾空白、术语 */
 function qaCheck(entry: Entry, draft: string, engine: Engine, matched: Term[], t: TFn): QaItem[] {
   const out: QaItem[] = [];
-  const r = checkMarkup(entry.original, draft, entry.category);
+  const r = checkMarkup(entry.original, draft, entry.category, engine);
   // 原文控制符本身的问题：译文为空时也提示，便于译者修正
   if (r.sourceIssues.length) {
     out.push({ type: 'warning', text: t('entry.qa.sourceIssues', { codes: uniq(r.sourceIssues.map((i) => i.text)).join(' ') }) });
   }
   if (!draft) return out;
-  const { codes, tags } = missingMarkup(entry, draft);
+  const { codes, tags } = missingMarkup(entry, draft, engine);
   if (codes.length) out.push({ type: 'warning', text: t('entry.qa.missingCodes', { codes: codes.join(' ') }) });
   if (tags.length) out.push({ type: 'warning', text: t('entry.qa.missingTags', { tags: tags.join(' ') }) });
   const extra = uniq([...r.extraCodes, ...r.extraPlaceholders]);
@@ -174,7 +174,7 @@ export const EntryPanel = forwardRef<EntryPanelHandle, Props>(function EntryPane
 
   useImperativeHandle(ref, () => ({ focus: () => taRef.current?.focus({ cursor: 'end' }) }));
 
-  const { matched } = useMemo(() => findTerms(entry.original, terms), [entry.original, terms]);
+  const { matched } = useMemo(() => findTerms(entry.original, terms, engine), [entry.original, terms, engine]);
   const linked = useLinked(pid, entry).data ?? [];
   const qa = useMemo(() => qaCheck(entry, draft, engine, matched, t), [entry, draft, engine, matched, t]);
 

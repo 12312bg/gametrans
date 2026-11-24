@@ -2,7 +2,7 @@
   "name": "@gametrans/rpgmaker",
   "version": "0.1.0",
   "private": true,
-  "description": "RPG Maker XP/VX/VX Ace/MV/MZ 文本提取与回写",
+  "description": "RPG Maker XP/VX/VX Ace/MV/MZ 与 Twine（SugarCube）文本提取与回写",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

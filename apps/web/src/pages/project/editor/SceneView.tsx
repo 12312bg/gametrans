@@ -83,6 +83,9 @@ export function branchText(s: BranchStep, t: TFn): string {
       return t(`branch.battle.${s.result}`);
     case 'loop':
       return t('branch.loop');
+    case 'macro':
+      // Twine：<<else>> 显示对应的 <<if>> 条件
+      return s.of !== undefined ? t('branch.macroElse', { name: s.name, cond: s.of }) : t('branch.macro', { macro: `<<${s.name}${s.args ? ` ${s.args}` : ''}>>` });
   }
 }
 

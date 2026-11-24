@@ -63,6 +63,7 @@ export interface TermSnapshot {
  * - if / else：条件分支（type 为 RPG Maker 的条件类型，args 为其余参数）
  * - battle：战斗处理的「胜利 / 逃跑 / 失败时」
  * - loop：循环
+ * - macro：Twine 的容器宏（<<if>>、<<link>>、<<switch>> 等）；else 时 of 为对应 <<if>> 的条件
  */
 export type BranchStep =
   /** at：「显示选项」指令在列表中的下标（选项词条的键为 …/list/<at>/<序号>）；旧数据没有 */
@@ -70,4 +71,5 @@ export type BranchStep =
   | { k: 'cancel' }
   | { k: 'if' | 'else'; type: number; args: (string | number | boolean)[] }
   | { k: 'battle'; result: 'win' | 'escape' | 'lose' }
-  | { k: 'loop' };
+  | { k: 'loop' }
+  | { k: 'macro'; name: string; args: string; of?: string };

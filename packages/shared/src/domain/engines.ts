@@ -1,4 +1,4 @@
-export const ENGINES = ['RMXP', 'RMVX', 'RMVXACE', 'RMMV', 'RMMZ'] as const;
+export const ENGINES = ['RMXP', 'RMVX', 'RMVXACE', 'RMMV', 'RMMZ', 'TWINE'] as const;
 export type Engine = (typeof ENGINES)[number];
 
 /** 产品名不做翻译 */
@@ -8,6 +8,7 @@ export const ENGINE_NAMES: Record<Engine, string> = {
   RMVXACE: 'RPG Maker VX Ace',
   RMMV: 'RPG Maker MV',
   RMMZ: 'RPG Maker MZ',
+  TWINE: 'Twine (SugarCube)',
 };
 
 export const ENGINE_EXTENSIONS: Record<Engine, string[]> = {
@@ -16,7 +17,10 @@ export const ENGINE_EXTENSIONS: Record<Engine, string[]> = {
   RMVXACE: ['.rvdata2'],
   RMMV: ['.json', '.js'],
   RMMZ: ['.json', '.js'],
+  TWINE: ['.html', '.htm', '.twee', '.tw'],
 };
+
+export const isRpgMakerEngine = (engine: Engine) => engine !== 'TWINE';
 
 export function isRgssEngine(engine: Engine): boolean {
   return engine === 'RMXP' || engine === 'RMVX' || engine === 'RMVXACE';
@@ -35,6 +39,11 @@ export function normalizeGamePath(rawPath: string, engine: Engine): string | nul
   if (path.split('/').some((seg) => seg === '..' || seg.startsWith('__MACOSX'))) return null;
   const base = path.split('/').pop() ?? '';
   if (base.startsWith('.')) return null;
+
+  if (engine === 'TWINE') {
+    // 编译后的故事 HTML 或 Tweego 源码；路径保持压缩包 / 文件夹中的相对位置
+    return /\.(html?|twee|tw)$/i.test(base) ? path : null;
+  }
 
   if (isRgssEngine(engine)) {
     if (!base.toLowerCase().endsWith(ENGINE_EXTENSIONS[engine][0])) return null;

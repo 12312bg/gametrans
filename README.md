@@ -1,6 +1,6 @@
-# GameTrans · RPG Maker 本地化在线协作平台
+# GameTrans · 游戏本地化在线协作平台
 
-参考 [ParaTranz](https://paratranz.cn) 的在线游戏本地化协作平台，首批支持 **RPG Maker XP / VX / VX Ace / MV / MZ**。
+参考 [ParaTranz](https://paratranz.cn) 的在线游戏本地化协作平台，支持 **RPG Maker XP / VX / VX Ace / MV / MZ** 与 **Twine（SugarCube 2）**。
 
 上传游戏数据（单个文件、整个文件夹或 zip 压缩包），平台自动提取可翻译文本。团队成员在线翻译、审核，最后一键导出可直接覆盖到游戏目录的数据文件。界面与服务端提示支持简体中文和英文。
 
@@ -9,7 +9,7 @@
 | 模块 | 说明 |
 | --- | --- |
 | 上传 | 支持数据文件、整个游戏文件夹或 zip。zip 在浏览器中解压，只上传数据文件，几百 MB 的游戏包也不会超过上传上限；通过 API 直接上传的 zip 由服务端流式解压 |
-| 文件解析 | 无损读写 Ruby Marshal（`.rxdata` / `.rvdata` / `.rvdata2`）与 MV/MZ JSON、`js/plugins.js`；未翻译时导出结果与原文件逐字节一致 |
+| 文件解析 | 无损读写 Ruby Marshal（`.rxdata` / `.rvdata` / `.rvdata2`）与 MV/MZ JSON、`js/plugins.js`，以及 Twine 编译后的故事 HTML 与 Tweego 源码（`.twee`）；未翻译时导出结果与原文件逐字节一致 |
 | 在线翻译 | 词条列表 + 编辑面板；高亮控制符（`\C[2]`、`\N[1]` 等）和术语，点击原文中的控制符或术语即可插入到译文光标处；保存、审核等操作后，如有原文完全相同的其他词条，询问是否一并应用（可选覆盖已有不同译文，可记住本次选择）；保存后可「撤销」恢复到修改前（含一并应用的词条），未保存的修改可一键还原；提示缺失控制符、行数超出，缺少控制符 / 插件标签时保存或审核通过前需确认；快捷键；未保存草稿提示；并发编辑冲突处理 |
 | 审核流程 | 未翻译 → 已翻译 → 已审核，另有「有疑问 / 已锁定 / 已隐藏」；支持批量审核、锁定、隐藏、清空 |
 | 批量替换 | 在当前筛选结果或整个项目的译文中查找替换（可区分大小写、正则），先预览高亮改动再执行；状态不变，可在历史中回滚 |
@@ -36,7 +36,7 @@
 
 - **前端**：React 18、Vite 5、TypeScript、Ant Design 5、TanStack Query 5、React Router 6、i18next
 - **后端**：NestJS 10、Prisma 6、PostgreSQL 16（`pg_trgm`）、BullMQ 5 + Redis（异步解析与导出）
-- **解析库**：`packages/rpgmaker`，纯 TypeScript 实现，包括 Ruby Marshal 4.8 读写、RGSS 脚本字符串词法分析和 MV/MZ 数据遍历。它依赖 `fflate`，可在 Node 和浏览器中运行
+- **解析库**：`packages/rpgmaker`，纯 TypeScript 实现，包括 Ruby Marshal 4.8 读写、RGSS 脚本字符串词法分析、MV/MZ 数据遍历和 Twine（SugarCube）故事解析。它依赖 `fflate`，可在 Node 和浏览器中运行
 - **工程**：pnpm workspace monorepo，Docker Compose 部署
 
 ## 目录结构
@@ -74,6 +74,7 @@ gametrans/
 ├── packages/
 │   ├── shared/                  # 前后端共享
 │   │   ├── src/domain/          #   引擎与路径识别、角色与权限矩阵、词条状态、令牌规则、附件路径、查找替换
+│   │   ├── src/twine/           #   SugarCube 词法分析、Twine 标记检查、宏规则（前后端共用）
 │   │   ├── src/errors.ts        #   错误码 → HTTP 状态码
 │   │   ├── src/format.ts        #   结构化文本（位置说明、动态、提示）的渲染
 │   │   └── src/i18n/            #   前后端共用文案：错误、校验、枚举、动态、位置说明、解析提示
@@ -81,6 +82,7 @@ gametrans/
 │       ├── src/marshal/         #   Ruby Marshal 读写（字节级往返）
 │       ├── src/rgss/            #   XP/VX/Ace 数据与 Scripts 脚本字符串
 │       ├── src/mvmz/            #   MV/MZ JSON 与 plugins.js
+│       ├── src/twine/           #   Twine：故事 HTML / twee 容器、段落提取与回写、自定义宏分析
 │       ├── src/events.ts        #   事件指令遍历（两类引擎共用）
 │       ├── src/preedit.ts       #   数据文件预编辑：易读格式、字段级补丁、保持原排版写回
 │       └── test/                #   测试与夹具（Ruby 生成的 RGSS 数据、MV/MZ JSON）
@@ -402,6 +404,23 @@ while True:
 - **加密归档**：`.rgssad` / `.rgss2a` / `.rgss3a` 需要先解包成 `Data/` 目录再上传。MV/MZ 的加密只针对图片和音频，不影响 `data/*.json`。
 - **导出使用**：解压导出包后覆盖到游戏根目录。如果游戏使用加密归档，需要删除或改名归档文件，让游戏读取散装的 `Data/` 文件。
 
+## Twine 支持说明
+
+目前支持 **SugarCube 2** 故事格式（这类 HTML 游戏绝大多数使用它）。Harlowe、Chapbook、Snowman 和 Twine 1 的故事会在上传结果中提示「暂不支持」。
+
+| 上传文件 | 提取内容 |
+| --- | --- |
+| 编译后的故事 HTML（如 `index.html`，Twine 2 或 Tweego 生成）、Tweego 源码 `*.twee` / `*.tw` | 段落正文、链接文字、内置宏（`<<link>>`、`<<button>>`、`<<linkreplace>>`、`<<option>>` 等）的显示文字、自定义宏中按规则指定的参数、界面段落（`StoryCaption`、`StoryMenu` 等）、脚本字符串（Story JavaScript、`<<script>>`、`<<set>>` / `<<run>>` / `<<print>>` 中的字符串） |
+
+- **整个游戏 zip**：可以直接上传 itch.io 下载的压缩包。只上传其中的 `.html` / `.twee` 文件，不是故事的 HTML（如 credits.html）会列为跳过；图片、音频等素材不需要上传。文件路径保持压缩包中的相对位置，导出包按同样的结构覆盖到游戏目录即可。Electron 打包的游戏需先解开 `resources/app.asar`，NW.js 的 `package.nw` 本身就是 zip。
+- **怎么切分词条**：每行文字一条词条。行内的宏、变量和 HTML 标签（如 `Hello, <<print $name>>!`、`$gold`、`<b>`）留在词条中作为控制符高亮，译文可以调整位置，漏掉时会提示（批量保存的 `strict` 模式会拒绝写入）。`<<if>>`、`<<switch>>`、`<<link>>` 等容器宏会断开词条，并记录为分支路径，在「整段」视图中缩进显示；`<<else>>` 会注明对应的条件。
+- **链接**：`[[文字|目标]]`、`[[文字->目标]]`、`[[目标<-文字]]` 只翻译显示文字，目标段落名不动；`[[目标]]` 在词条中显示为 `[[目标|目标]]`，只翻译前半部分即可。单独一行的链接只提取显示文字。
+- **自定义宏（widget）**：很多作者用自己定义的宏显示对话和按钮，如 `<<say ms "台词">>`、`<<but "按钮文字" 段落>>`。在「项目设置 → Twine 宏规则」中点「分析故事」，平台会统计故事中的自定义宏，推荐哪个参数是显示文字、哪个参数是说话人，确认后保存并「重新提取」。说话人参数会显示在整段视图中；说话人写成字符串时也会作为「说话人」词条提取。规则也可以通过 `GET/PUT /api/projects/:pid/twine/rules` 和 `GET /api/projects/:pid/twine/macros` 读写。
+- **脚本字符串默认隐藏**：`<<set $name to "Agnes">>` 这类字符串可能在 `<<if $name is "Agnes">>` 中被比较，翻译一处会让判断失效，因此默认隐藏；`<<if>>` 等条件中的字符串不提取。原文相同的脚本字符串可以一键同步译文。
+- **不提取**：段落名、`StoryTitle` / `StoryData`、样式表、注释、宏的其他参数（图片路径、样式、条件等）、`<title>` 与故事名（SugarCube 用故事名区分存档，改动会让旧存档失效）。
+- **写回**：只替换改动的片段并按原文件的风格转义（段落内容为 HTML 转义，宏参数字符串与脚本按 JavaScript 转义），其余字节保持不变。
+- **界面文字与字体**：SugarCube 自带的存档、设置等界面文字要在 Story JavaScript 中用 `l10nStrings` 覆盖，中文字体要在样式表中设置。这两处不是原文中的字符串，平台不会生成，目前需要在导出后手动加到故事 HTML 中。
+
 ## 上传新版本
 
 数据文件按路径（如 `www/data/Map001.json`）识别：路径已存在就是新版本。网页上传中含有已存在的文件时（包括文件列表里的「上传新版本」按钮），会先显示变更预览：每个文件新增、原文变更、将删除的词条数和明细，并标出会被删除的已有译文。确认后才合并，取消则丢弃本次上传。全是新文件时直接导入。
@@ -484,4 +503,5 @@ while True:
 - 暂未提供词条评论和讨论、实时在线状态（WebSocket）。
 - 文件存储目前为本地磁盘（`STORAGE_DIR`），如需对象存储可扩展 `StorageService`。
 - 后台任务默认单并发，适合单实例部署。
+- Twine 暂只支持 SugarCube 2；Harlowe、Twine 1 格式与直接读取 Electron 的 `app.asar` 尚未支持。故事 HTML 不支持数据文件预编辑。
 - 界面目前只有简体中文和英文。

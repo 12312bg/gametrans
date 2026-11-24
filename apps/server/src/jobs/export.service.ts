@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { strToU8 } from 'fflate';
 import { JsonChange, UnsupportedFileError, applyPreEdit, applyTranslations, preEditTouchedEntries } from '@gametrans/rpgmaker';
-import { ContextPart, DEFAULT_LOCALE, Engine, Issue, formatContext, isLocale } from '@gametrans/shared';
+import { ContextPart, DEFAULT_LOCALE, Engine, Issue, ParserConfig, formatContext, isLocale } from '@gametrans/shared';
 import { Job, Stage } from '@prisma/client';
 import { translator } from '../common/locale';
 import { StorageService } from '../common/storage.service';
@@ -53,7 +53,8 @@ export class ExportService {
       const map = new Map(rows.filter((r) => r.translation !== '' && stages.includes(r.stage)).map((r) => [r.key, r.translation]));
       try {
         const original = await this.storage.read(file.storageKey);
-        const out = applyTranslations(file.path, this.withPreEdit(file, original, project.engine as Engine, errors), project.engine as Engine, map);
+        const config = project.parserConfig as ParserConfig | null;
+        const out = applyTranslations(file.path, this.withPreEdit(file, original, project.engine as Engine, errors, config), project.engine as Engine, map, config);
         zip.addBytes(file.path, out.data);
         names.add(file.path.toLowerCase());
         applied += out.applied;
@@ -109,10 +110,10 @@ export class ExportService {
    * 数据文件的预编辑：先应用到原文件，再写入译文。原文件更新后，对不上的字段跳过并提示；
    * 若预编辑会改动词条（键错位），本次不应用。
    */
-  private withPreEdit(file: { path: string; editPatch: unknown }, original: Uint8Array, engine: Engine, errors: ExportResult['errors']): Uint8Array {
+  private withPreEdit(file: { path: string; editPatch: unknown }, original: Uint8Array, engine: Engine, errors: ExportResult['errors'], config: ParserConfig | null): Uint8Array {
     const patch = (file.editPatch as JsonChange[] | null) ?? [];
     if (!patch.length) return original;
-    if (preEditTouchedEntries(file.path, original, engine, patch).length) {
+    if (preEditTouchedEntries(file.path, original, engine, patch, config).length) {
       errors.push({ name: file.path, code: 'PREEDIT_STALE' });
       return original;
     }

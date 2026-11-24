@@ -523,7 +523,8 @@
                 "RMVX",
                 "RMVXACE",
                 "RMMV",
-                "RMMZ"
+                "RMMZ",
+                "TWINE"
               ],
               "type": "string"
             }
@@ -3064,6 +3065,89 @@
         ]
       }
     },
+    "/api/projects/{pid}/twine/rules": {
+      "get": {
+        "operationId": "TwineController_rules",
+        "summary": "宏规则",
+        "description": "`builtin` 为内置的 SugarCube 规则，`macros` 为项目自定义规则（同名覆盖内置）。每条规则说明宏的第几个参数是要翻译的显示文字、第几个参数是说话人。仅 Twine 项目。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Twine"
+        ]
+      },
+      "put": {
+        "operationId": "TwineController_saveRules",
+        "summary": "保存宏规则",
+        "description": "整体替换项目自定义规则。需要管理员及以上。保存后需「重新提取」才会生效。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTwineRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Twine"
+        ]
+      }
+    },
+    "/api/projects/{pid}/twine/macros": {
+      "get": {
+        "operationId": "TwineController_macros",
+        "summary": "分析自定义宏",
+        "description": "统计已上传故事中内置宏以外的宏：使用次数、各参数位置的字符串数与示例，以及推荐的规则（`suggested`，不像显示文字时为 null）。",
+        "parameters": [
+          {
+            "name": "pid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Twine"
+        ]
+      }
+    },
     "/api/projects/{pid}/history": {
       "get": {
         "operationId": "HistoryController_list",
@@ -3704,7 +3788,8 @@
               "RMVX",
               "RMVXACE",
               "RMMV",
-              "RMMZ"
+              "RMMZ",
+              "TWINE"
             ]
           },
           "sourceLang": {
@@ -3767,8 +3852,14 @@
               "RMVX",
               "RMVXACE",
               "RMMV",
-              "RMMZ"
+              "RMMZ",
+              "TWINE"
             ]
+          },
+          "parserConfig": {
+            "type": "object",
+            "nullable": true,
+            "description": "解析配置：Twine 项目的自定义宏规则 { twine: { macros } }；其他引擎为 null"
           },
           "visibility": {
             "type": "string",
@@ -3808,6 +3899,7 @@
         },
         "required": [
           "engine",
+          "parserConfig",
           "visibility",
           "id",
           "name",
@@ -3860,8 +3952,14 @@
               "RMVX",
               "RMVXACE",
               "RMMV",
-              "RMMZ"
+              "RMMZ",
+              "TWINE"
             ]
+          },
+          "parserConfig": {
+            "type": "object",
+            "nullable": true,
+            "description": "解析配置：Twine 项目的自定义宏规则 { twine: { macros } }；其他引擎为 null"
           },
           "visibility": {
             "type": "string",
@@ -3929,6 +4027,7 @@
         },
         "required": [
           "engine",
+          "parserConfig",
           "visibility",
           "myRole",
           "permissions",
@@ -4703,6 +4802,63 @@
         },
         "required": [
           "text"
+        ]
+      },
+      "TwineMacroRuleDto": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "description": "要翻译的参数下标（从 0 开始）；\"all\" 表示全部字符串参数",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "all"
+                ]
+              }
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "choice",
+              "system"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "宏名，如 say"
+          },
+          "speaker": {
+            "type": "number",
+            "description": "作为说话人显示的参数下标"
+          }
+        },
+        "required": [
+          "args",
+          "name"
+        ]
+      },
+      "SaveTwineRulesDto": {
+        "type": "object",
+        "properties": {
+          "macros": {
+            "description": "项目自定义规则，整体替换；与内置规则同名时覆盖内置规则",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TwineMacroRuleDto"
+            }
+          }
+        },
+        "required": [
+          "macros"
         ]
       },
       "CreateExportDto": {

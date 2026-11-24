@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { PERMISSIONS } from '@gametrans/shared';
+import { ENGINES, PERMISSIONS } from '@gametrans/shared';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AccessService } from '../common/access.service';
 import { ApiPaging, ProjectDetailModel, ProjectModel } from '../common/api.models';
@@ -19,7 +19,7 @@ export class ProjectsController {
   @ApiOperation({ summary: '项目列表', description: 'scope=public 公开项目（无需登录）；mine 我参与的；all 全部（仅超级管理员）。' })
   @ApiQuery({ name: 'scope', required: false, enum: ['public', 'mine', 'all'] })
   @ApiQuery({ name: 'q', required: false, description: '按名称 / 简介搜索' })
-  @ApiQuery({ name: 'engine', required: false, enum: ['RMXP', 'RMVX', 'RMVXACE', 'RMMV', 'RMMZ'] })
+  @ApiQuery({ name: 'engine', required: false, enum: ENGINES as unknown as string[] })
   @ApiPaging()
   @Public()
   @Get()

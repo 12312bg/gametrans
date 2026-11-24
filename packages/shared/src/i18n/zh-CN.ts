@@ -45,6 +45,7 @@ export const zhCN = {
   'error.ATTACHMENT_NOT_FOUND': '附件不存在或已删除',
   'error.PREVIEW_UNAVAILABLE': '这次预览已失效（已确认、已取消或超过 24 小时），请重新上传',
   'error.PREEDIT_UNSUPPORTED': '这个文件不支持预编辑：只有 MV/MZ 的 JSON 数据文件、plugins.js 和文本附件可以预编辑',
+  'error.NOT_TWINE_PROJECT': '只有 Twine 项目可以设置宏规则',
   'error.PREEDIT_INVALID_JSON': '预编辑的内容不是有效的 JSON：{detail}',
   'error.PREEDIT_NOT_TEXT': '只能预编辑 UTF-8 编码、5 MB 以内的文本文件',
   'error.PREEDIT_TOUCHES_ENTRIES': '预编辑改动了 {count} 条已提取的词条（如 {key}）。词条请在翻译页修改，预编辑也不能增删事件指令',
@@ -76,6 +77,7 @@ export const zhCN = {
   'validation.displayNameLength': '昵称最多 32 个字符',
   'validation.projectName': '项目名称为 1-80 个字符',
   'validation.engine': '不支持的引擎',
+  'validation.twineRules': '宏规则格式不正确',
   'validation.sourceLang': '不支持的源语言',
   'validation.targetLang': '不支持的目标语言',
   'validation.role': '无效的角色',
@@ -167,6 +169,7 @@ export const zhCN = {
   // ── 项目动态 ──
   'activity.project.create': '创建了项目「{name}」',
   'activity.project.update': '修改了项目设置',
+  'activity.project.twineRules': '更新了 Twine 宏规则（{count} 条自定义规则）',
   'activity.project.transfer': '将项目转让给 {name}',
   'activity.member.role': '将 {name} 的角色改为{role}',
   'activity.member.leave': '退出了项目',
@@ -262,6 +265,14 @@ export const zhCN = {
   'ctx.cmd.changeProfile': '更改简介（角色 #{actor}）',
   'ctx.cmd.pluginCommand': '插件指令',
   'ctx.cmd.pluginCommandMZ': '插件指令 {plugin}:{command}',
+  'ctx.tw.passage': '段落「{name}」',
+  'ctx.tw.passageTags': '段落「{name}」[{tags}]',
+  'ctx.tw.text': '正文 · 第{n}行',
+  'ctx.tw.link': '链接 → {target} · 第{n}行',
+  'ctx.tw.arg': '<<{macro}>> 参数 {i} · 第{n}行',
+  'ctx.tw.say': '<<{macro}>> 说话人 {speaker} · 第{n}行',
+  'ctx.tw.script': '脚本字符串 · 第{n}行',
+  'ctx.tw.storyScript': 'Story JavaScript · 第{n}行',
 
   // ── 解析 / 导出提示 ──
   'issue.ZIP_INVALID': '压缩包损坏或格式不受支持',
@@ -283,4 +294,7 @@ export const zhCN = {
   'issue.PREEDIT_STALE': '原文件已更新，预编辑会改动词条，本次导出未应用预编辑',
   'issue.ATTACHMENT_CONFLICT': '与数据文件路径冲突，未导出',
   'issue.ATTACHMENT_MISSING': '附件文件已丢失，未导出',
+  'issue.TWINE_NOT_STORY': '不是 Twine 故事文件（未找到 tw-storydata），已跳过',
+  'issue.TWINE_FORMAT_UNSUPPORTED': '暂不支持 {format} 故事格式，目前只支持 SugarCube 2',
+  'issue.TWINE_TWINE1': '这是 Twine 1 格式的故事，暂不支持，请用 Twine 2 或 Tweego 重新编译',
 } as const;

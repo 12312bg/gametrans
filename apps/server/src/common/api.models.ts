@@ -3,6 +3,7 @@
  * 文件名以 .models.ts 结尾，由 @nestjs/swagger 的 CLI 插件自动生成属性元数据。
  */
 import { applyDecorators } from '@nestjs/common';
+import { ENGINES } from '@gametrans/shared';
 import { ApiProperty, ApiQuery } from '@nestjs/swagger';
 
 export class ErrorModel {
@@ -45,8 +46,11 @@ export class ProjectModel {
   id: string;
   name: string;
   description: string;
-  @ApiProperty({ enum: ['RMXP', 'RMVX', 'RMVXACE', 'RMMV', 'RMMZ'] })
+  @ApiProperty({ enum: ENGINES as unknown as string[] })
   engine: string;
+  /** 解析配置：Twine 项目的自定义宏规则 { twine: { macros } }；其他引擎为 null */
+  @ApiProperty({ type: Object, nullable: true })
+  parserConfig: Record<string, unknown> | null;
   /** 源语言代码，如 ja */
   sourceLang: string;
   /** 目标语言代码，如 zh-CN */

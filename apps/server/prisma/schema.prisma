@@ -13,6 +13,7 @@ enum Engine {
   RMVXACE
   RMMV
   RMMZ
+  TWINE
 }
 
 enum ProjectRole {
@@ -103,6 +104,8 @@ model Project {
   targetLang  String
   visibility  Visibility @default(PUBLIC)
   ownerId     String
+  /// 解析配置 { twine?: { macros: TwineMacroRule[] } }，修改后需重新提取
+  parserConfig Json?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

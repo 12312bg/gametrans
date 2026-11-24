@@ -14,6 +14,7 @@ import {
   permissionForTransition,
   permissionToEdit,
   buildMatcher,
+  Engine,
   checkMarkup,
   hasMarkupWarnings,
   hasMissingMarkup,
@@ -84,9 +85,9 @@ const MAX_BATCH = 200_000;
 /** 整段事件最多返回的词条数 */
 const SCENE_LIMIT = 2000;
 
-/** 从「显示文章」的位置说明中取说话人（姓名框）与脸图 */
+/** 从位置说明中取说话人与脸图：RPG Maker 的「显示文章」（姓名框、脸图），Twine 的说话人宏参数 */
 function speakerOf(parts: ContextPart[] | null): { name?: string; face?: string } | null {
-  const p = parts?.find((x) => x.k.startsWith('ctx.cmd.showText'))?.p as { speaker?: string; face?: string; index?: number } | undefined;
+  const p = parts?.find((x) => x.k.startsWith('ctx.cmd.showText') || x.k === 'ctx.tw.say')?.p as { speaker?: string; face?: string; index?: number } | undefined;
   if (!p || (!p.speaker && !p.face)) return null;
   return { ...(p.speaker ? { name: p.speaker } : {}), ...(p.face ? { face: `${p.face}(${p.index ?? 0})` } : {}) };
 }
@@ -324,7 +325,7 @@ export class EntriesService {
         continue;
       }
       const translation = normalizeText(item.translation);
-      const markup = checkMarkup(e.original, translation, e.category);
+      const markup = checkMarkup(e.original, translation, e.category, ctx.project.engine as Engine);
       const warnings = hasMarkupWarnings(markup) ? markup : undefined;
       const note = item.note?.trim() || undefined;
       if (strict && hasMissingMarkup(markup) && !note) {

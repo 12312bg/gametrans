@@ -1,4 +1,4 @@
-import type { BranchStep, ContextPart, EntryCategory, Engine, Issue, Params } from '@gametrans/shared';
+import type { BranchStep, ContextPart, EntryCategory, Engine, Issue, Params, ParserConfig } from '@gametrans/shared';
 
 export interface ExtractedEntry {
   /** 文件内唯一且尽量稳定的键，如 events/1/pages/0/list/3 */
@@ -18,7 +18,7 @@ export interface Slot extends ExtractedEntry {
   set(value: string): void;
 }
 
-export type FileFormat = 'mvmz-json' | 'mvmz-plugins' | 'rgss-marshal';
+export type FileFormat = 'mvmz-json' | 'mvmz-plugins' | 'rgss-marshal' | 'twine-html' | 'twee';
 
 export interface ParsedDocument {
   format: FileFormat;
@@ -31,6 +31,8 @@ export interface ParsedDocument {
 export interface ParseOptions {
   engine: Engine;
   path: string;
+  /** 项目的解析配置（Twine 的宏规则等） */
+  config?: ParserConfig | null;
 }
 
 /** 文件无法解析；code 对应 i18n 的 issue.<code> */

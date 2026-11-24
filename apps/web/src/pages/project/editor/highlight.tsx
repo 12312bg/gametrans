@@ -1,7 +1,12 @@
 import { Tooltip } from 'antd';
-import { controlCodeSpans } from '@gametrans/shared';
+import { Engine, controlCodeSpans } from '@gametrans/shared';
 import { MouseEvent, ReactNode } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import type { ProjectOutlet } from '../../../api/project';
 import type { Term } from '../../../api/types';
+
+/** 当前项目的引擎：决定高亮哪种标记（RPG Maker 控制符或 Twine 宏） */
+export const useMarkupEngine = (): Engine | undefined => useOutletContext<ProjectOutlet | undefined>()?.project.engine;
 
 interface Range {
   start: number;
@@ -14,9 +19,9 @@ function overlaps(ranges: Range[], s: number, e: number) {
 }
 
 /** 找出原文中命中的术语（长术语优先，避免被短术语切碎） */
-export function findTerms(text: string, terms: Term[]): { ranges: Range[]; matched: Term[] } {
+export function findTerms(text: string, terms: Term[], engine?: Engine): { ranges: Range[]; matched: Term[] } {
   // 名字框 \n<名字> 中的名字不算控制符，可以命中术语
-  const ranges: Range[] = controlCodeSpans(text);
+  const ranges: Range[] = controlCodeSpans(text, engine);
   const matched: Term[] = [];
   const lower = text.toLowerCase();
   const sorted = [...terms].sort((a, b) => b.term.length - a.term.length);
@@ -50,7 +55,7 @@ const hasSelection = () => !!window.getSelection()?.toString();
  * 传入 onInsert 时，点击控制符插入该控制符，点击术语插入约定译法。
  */
 export function Highlighted({ text, terms, onInsert, insertHint }: { text: string; terms: Term[]; onInsert?: (s: string) => void; insertHint?: string }) {
-  const { ranges } = findTerms(text, terms);
+  const { ranges } = findTerms(text, terms, useMarkupEngine());
   const click = (s: string) =>
     onInsert
       ? {
@@ -106,10 +111,11 @@ export function Highlighted({ text, terms, onInsert, insertHint }: { text: strin
 
 /** 只高亮控制符（列表中使用，性能更好） */
 export function CodesOnly({ text }: { text: string }) {
+  const engine = useMarkupEngine();
   const out: ReactNode[] = [];
   let pos = 0;
   let i = 0;
-  for (const r of controlCodeSpans(text)) {
+  for (const r of controlCodeSpans(text, engine)) {
     if (r.start > pos) out.push(text.slice(pos, r.start));
     out.push(
       <span key={i++} className="hl-code">

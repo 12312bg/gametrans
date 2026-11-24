@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JsonChange, UnsupportedFileError, applyPreEdit, computePatch, editableText, editableView, isPreEditable, preEditTouchedEntries } from '@gametrans/rpgmaker';
-import type { Engine } from '@gametrans/shared';
+import type { Engine, ParserConfig } from '@gametrans/shared';
 import { Prisma } from '@prisma/client';
 import { ActivityService } from '../common/activity.service';
 import { fail } from '../common/errors';
@@ -63,7 +63,7 @@ export class FilesService {
   async saveEdit(pid: string, fid: string, content: string, userId: string) {
     const file = await this.get(pid, fid);
     if (!isPreEditable(file.path)) throw fail('PREEDIT_UNSUPPORTED');
-    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: pid }, select: { engine: true } });
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: pid }, select: { engine: true, parserConfig: true } });
     const bytes = await this.storage.read(file.storageKey);
     let patch: JsonChange[];
     try {
@@ -73,7 +73,7 @@ export class FilesService {
       throw e;
     }
     if (!patch.length) return this.clearEdit(pid, fid, userId);
-    const touched = preEditTouchedEntries(file.path, bytes, project.engine as Engine, patch);
+    const touched = preEditTouchedEntries(file.path, bytes, project.engine as Engine, patch, project.parserConfig as ParserConfig | null);
     if (touched.length) throw fail('PREEDIT_TOUCHES_ENTRIES', { count: touched.length, key: touched[0].key }, { touched: touched.slice(0, 20) });
     await this.prisma.file.update({ where: { id: fid }, data: { editPatch: patch as unknown as Prisma.InputJsonValue, editedAt: new Date(), editedById: userId } });
     await this.activity.log(pid, userId, 'file.preedit', { path: file.path });

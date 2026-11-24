@@ -126,7 +126,7 @@ export function UploadCard({ existingPaths, onUploaded, onPreview, bare }: Props
         <p className="ant-upload-text">{t('upload.drop')}</p>
         <p className="ant-upload-hint">
           <FileZipOutlined /> {t('upload.hint', { exts: exts.join(' / ') })}
-          {t(isRgssEngine(engine) ? 'upload.hintRgss' : 'upload.hintMv')}
+          {t(engine === 'TWINE' ? 'upload.hintTwine' : isRgssEngine(engine) ? 'upload.hintRgss' : 'upload.hintMv')}
         </p>
       </Upload.Dragger>
       <Space style={{ marginTop: 12 }} wrap>

@@ -1693,3 +1693,11 @@ button.scene-row {
     padding: 8px 12px;
   }
 }
+
+/* Twine 宏分析：参数示例单行截断 */
+.twine-analysis .ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { ExtractedEntry, UnsupportedFileError, extractEntries } from '@gametrans/rpgmaker';
-import { Engine, Issue, contextSearchText, normalizeGamePath } from '@gametrans/shared';
+import { Engine, Issue, ParserConfig, contextSearchText, normalizeGamePath } from '@gametrans/shared';
 import { Job, Prisma, Project, Stage } from '@prisma/client';
 import { ActivityService } from '../common/activity.service';
 import { chunk } from '../common/query';
@@ -67,7 +67,11 @@ interface MergePlan {
   removed: ExistingEntry[];
 }
 
-const formatOf = (path: string) => (/\.json$/i.test(path) ? 'mvmz-json' : /\.js$/i.test(path) ? 'mvmz-plugins' : 'rgss-marshal');
+const formatOf = (path: string) =>
+  /\.json$/i.test(path) ? 'mvmz-json' : /\.js$/i.test(path) ? 'mvmz-plugins' : /\.html?$/i.test(path) ? 'twine-html' : /\.tw(ee)?$/i.test(path) ? 'twee' : 'rgss-marshal';
+/** 这些提示表示文件不属于该引擎（如压缩包中 Twine 故事以外的 HTML），记为跳过而不是错误 */
+const SKIP_CODES = new Set(['TWINE_NOT_STORY']);
+const configOf = (project: Project) => project.parserConfig as ParserConfig | null;
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
 @Injectable()
@@ -95,6 +99,10 @@ export class ParseService {
           if (r) result.files.push(r);
           else result.skipped.push({ name: path, code: 'NO_TEXT' });
         } catch (e) {
+          if (e instanceof UnsupportedFileError && SKIP_CODES.has(e.code)) {
+            result.skipped.push({ name: path, code: e.code });
+            continue;
+          }
           result.errors.push(
             e instanceof UnsupportedFileError
               ? { name: path, code: e.code, params: e.params }
@@ -163,7 +171,7 @@ export class ParseService {
 
   /** 只计算导入后的变化，不写入数据库与存储 */
   async previewFile(project: Project, path: string, data: Uint8Array): Promise<FilePreview | null> {
-    const { entries } = extractEntries(path, data, project.engine as Engine);
+    const { entries } = extractEntries(path, data, project.engine as Engine, configOf(project));
     const existing = await this.prisma.file.findUnique({ where: { projectId_path: { projectId: project.id, path } } });
     if (!existing && !entries.length) return null;
     const base = { path, total: entries.length, added: 0, changed: 0, removed: 0, removedTranslated: 0, details: { added: [], changed: [], removed: [] } };
@@ -193,7 +201,7 @@ export class ParseService {
    * 文件内容未变时跳过，除非 reextract（提取规则更新后重新合并）。
    */
   async importFile(project: Project, path: string, data: Uint8Array, userId: string | null, reextract = false, batchId: string | null = null): Promise<FileImportResult | null> {
-    const { kind, entries, warnings } = extractEntries(path, data, project.engine as Engine);
+    const { kind, entries, warnings } = extractEntries(path, data, project.engine as Engine, configOf(project));
     const existing = await this.prisma.file.findUnique({ where: { projectId_path: { projectId: project.id, path } } });
     if (!existing && !entries.length) return null;
     const sha256 = createHash('sha256').update(data).digest('hex');

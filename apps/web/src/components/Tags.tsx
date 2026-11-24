@@ -41,14 +41,14 @@ export function StageDot({ stage }: { stage: Stage }) {
   );
 }
 
-const ENGINE_COLORS: Record<Engine, string> = { RMXP: 'geekblue', RMVX: 'cyan', RMVXACE: 'purple', RMMV: 'volcano', RMMZ: 'magenta' };
-const ENGINE_SHORT: Record<Engine, string> = { RMXP: 'XP', RMVX: 'VX', RMVXACE: 'VX Ace', RMMV: 'MV', RMMZ: 'MZ' };
+const ENGINE_COLORS: Record<Engine, string> = { RMXP: 'geekblue', RMVX: 'cyan', RMVXACE: 'purple', RMMV: 'volcano', RMMZ: 'magenta', TWINE: 'green' };
+const ENGINE_SHORT: Record<Engine, string> = { RMXP: 'RM XP', RMVX: 'RM VX', RMVXACE: 'RM VX Ace', RMMV: 'RM MV', RMMZ: 'RM MZ', TWINE: 'Twine' };
 
 export function EngineTag({ engine }: { engine: Engine }) {
   return (
     <Tooltip title={ENGINE_NAMES[engine]}>
       <Tag color={ENGINE_COLORS[engine]} bordered={false} style={{ fontWeight: 600 }}>
-        RM {ENGINE_SHORT[engine]}
+        {ENGINE_SHORT[engine]}
       </Tag>
     </Tooltip>
   );

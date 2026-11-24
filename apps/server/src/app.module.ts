@@ -19,6 +19,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TermsModule } from './terms/terms.module';
+import { TwineModule } from './twine/twine.module';
 import { UsersModule } from './users/users.module';
 
 function redisConnection(url: string) {
@@ -50,6 +51,7 @@ function redisConnection(url: string) {
     JobsModule,
     EntriesModule,
     TermsModule,
+    TwineModule,
     HistoryModule,
     ExportsModule,
   ],

@@ -1,4 +1,6 @@
 import { PERMISSIONS, Permission } from './permissions';
+import type { Engine } from './engines';
+import { extractTwineCodes, twineCodeSpans } from '../twine/markup';
 
 export const STAGES = ['UNTRANSLATED', 'TRANSLATED', 'QUESTIONED', 'REVIEWED', 'LOCKED', 'HIDDEN'] as const;
 export type Stage = (typeof STAGES)[number];
@@ -66,8 +68,12 @@ export function extractControlCodes(text: string): string[] {
   return text.match(CONTROL_CODE_REGEX) ?? [];
 }
 
-/** 控制符在文本中的位置；名字框只标出 \n< 与 >，中间的名字按普通文本处理 */
-export function controlCodeSpans(text: string): { start: number; end: number }[] {
+/**
+ * 控制符在文本中的位置；名字框只标出 \n< 与 >，中间的名字按普通文本处理。
+ * Twine 项目为宏、HTML 标签、变量与链接外壳。
+ */
+export function controlCodeSpans(text: string, engine?: Engine): { start: number; end: number }[] {
+  if (engine === 'TWINE') return twineCodeSpans(text);
   const out: { start: number; end: number }[] = [];
   for (const m of text.matchAll(new RegExp(CONTROL_CODE_REGEX.source, 'g'))) {
     const start = m.index!;
@@ -177,7 +183,8 @@ const TAGGED_CATEGORIES = new Set(['comment', 'note']);
  * 译文的控制符 / 占位符 / 标签检查。只比较数量，不要求顺序一致（%1 %2 可按语序调整）。
  * 译文为空时只报告原文问题。
  */
-export function checkMarkup(original: string, translation: string, category?: string): MarkupReport {
+export function checkMarkup(original: string, translation: string, category?: string, engine?: Engine): MarkupReport {
+  if (engine === 'TWINE') return checkTwineMarkup(original, translation);
   const sourceIssues = sourceCodeIssues(original);
   if (!translation) return { missingCodes: [], extraCodes: [], missingPlaceholders: [], extraPlaceholders: [], missingTags: [], sourceIssues };
   const so = extractControlCodes(original);
@@ -192,6 +199,15 @@ export function checkMarkup(original: string, translation: string, category?: st
     missingTags: category && TAGGED_CATEGORIES.has(category) ? missingTags(original, translation) : [],
     sourceIssues,
   };
+}
+
+/** Twine：宏、标签、变量、链接目标的数量必须一致（不要求顺序） */
+function checkTwineMarkup(original: string, translation: string): MarkupReport {
+  const empty: MarkupReport = { missingCodes: [], extraCodes: [], missingPlaceholders: [], extraPlaceholders: [], missingTags: [], sourceIssues: [] };
+  if (!translation) return empty;
+  const so = extractTwineCodes(original);
+  const tr = extractTwineCodes(translation);
+  return { ...empty, missingCodes: missingBy(so, tr, (s) => s), extraCodes: missingBy(tr, so, (s) => s) };
 }
 
 /** 是否有「译文漏掉」类问题（严格模式据此拒绝写入） */

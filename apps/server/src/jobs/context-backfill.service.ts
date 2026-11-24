@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { extractEntries } from '@gametrans/rpgmaker';
-import { Engine, contextSearchText } from '@gametrans/shared';
+import { Engine, ParserConfig, contextSearchText } from '@gametrans/shared';
 import { chunk } from '../common/query';
 import { StorageService } from '../common/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,11 +26,11 @@ export class ContextBackfillService implements OnApplicationBootstrap {
     const rows = await this.prisma.$queryRaw<{ fileId: string }[]>`SELECT DISTINCT "fileId" FROM "Entry" WHERE "contextData" IS NULL`;
     let updated = 0;
     for (const { fileId } of rows) {
-      const file = await this.prisma.file.findUnique({ where: { id: fileId }, include: { project: { select: { engine: true } } } });
+      const file = await this.prisma.file.findUnique({ where: { id: fileId }, include: { project: { select: { engine: true, parserConfig: true } } } });
       if (!file || !(await this.storage.exists(file.storageKey))) continue;
       let entries: ReturnType<typeof extractEntries>['entries'];
       try {
-        entries = extractEntries(file.path, await this.storage.read(file.storageKey), file.project.engine as Engine).entries;
+        entries = extractEntries(file.path, await this.storage.read(file.storageKey), file.project.engine as Engine, file.project.parserConfig as ParserConfig | null).entries;
       } catch {
         continue;
       }

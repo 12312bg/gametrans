@@ -15,6 +15,7 @@ const ENGINE_HINT: Record<Engine, string> = {
   RMVXACE: 'Data/*.rvdata2 (RGSS3)',
   RMMV: 'data/*.json + js/plugins.js',
   RMMZ: 'data/*.json + js/plugins.js',
+  TWINE: 'index.html / *.twee (SugarCube 2)',
 };
 
 interface FormValues {

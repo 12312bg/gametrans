@@ -222,7 +222,7 @@ export default function EditorPage() {
   const confirming = useRef(false);
   const confirmMarkup = (entry: Entry, translation: string, approving: boolean) =>
     new Promise<boolean>((done) => {
-      const { codes, tags } = missingMarkup(entry, translation);
+      const { codes, tags } = missingMarkup(entry, translation, project.engine);
       if (!codes.length && !tags.length) return done(true);
       confirming.current = true;
       const resolve = (v: boolean) => {

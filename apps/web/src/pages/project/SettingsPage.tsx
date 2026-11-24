@@ -8,6 +8,7 @@ import { useProject } from '../../api/project';
 import type { Member } from '../../api/types';
 import { useT } from '../../i18n';
 import { langOptions } from '../../i18n/format';
+import { TwineRulesCard } from './TwineRulesCard';
 import { errorMessage } from '../../utils';
 
 interface SettingsForm {
@@ -121,6 +122,8 @@ export default function SettingsPage() {
           </Button>
         </Form>
       </Card>
+
+      {project.engine === 'TWINE' && <TwineRulesCard pid={pid} />}
 
       {canOwn && (
         <Card variant="borderless" title={<span style={{ color: '#ef4444' }}>{t('settings.danger')}</span>} className="danger-card">

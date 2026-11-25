@@ -1766,3 +1766,15 @@ button.scene-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.twine-prefixes {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.twine-prefix {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}

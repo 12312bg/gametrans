@@ -123,7 +123,8 @@ export class TwineService {
         }
         for (const e of entries) {
           out.set(`${f.path}\u0000${e.key}`, e.original);
-          const macro = e.context[1]?.k === 'ctx.tw.arg' || e.context[1]?.k === 'ctx.tw.say' ? String(e.context[1].p?.macro ?? '') : '';
+          const k = e.context[1]?.k;
+          const macro = k === 'ctx.tw.arg' || k === 'ctx.tw.say' || k === 'ctx.tw.prefixed' ? String(e.context[1].p?.macro ?? '') : '';
           if (!macro) continue;
           const m = perMacro.get(macro) ?? { count: 0, samples: [] };
           m.count++;

@@ -17,8 +17,9 @@ interface Row {
   args: string;
   speaker: number | null;
   category: TwineRuleCategory | 'auto';
-  /** 分隔符：手动编辑中不显示，原样保留 */
+  /** 分隔符、前缀：手动编辑中不显示，原样保留 */
   split?: string[];
+  prefixes?: string[];
 }
 
 let seq = 0;
@@ -29,6 +30,7 @@ const toRow = (r: TwineMacroRule): Row => ({
   speaker: r.speaker ?? null,
   category: r.category ?? 'auto',
   ...(r.split?.length ? { split: r.split } : {}),
+  ...(r.prefixes?.length ? { prefixes: r.prefixes } : {}),
 });
 
 /** "1, 2" → [1, 2]；"all" → 'all'；格式不对返回 null */
@@ -50,6 +52,7 @@ const toRule = (r: Row): TwineMacroRule | null => {
     ...(r.speaker !== null ? { speaker: r.speaker } : {}),
     ...(r.category !== 'auto' ? { category: r.category } : {}),
     ...(r.split?.length ? { split: r.split } : {}),
+    ...(r.prefixes?.length ? { prefixes: r.prefixes } : {}),
   };
 };
 

@@ -8,6 +8,7 @@ import {
   TwineEvidenceKind,
   TwineMacroRule,
   TwineMacroStat,
+  TwinePrefixStat,
   lexSugarCube,
   parseMacroArgs,
   unescapeMacroString,
@@ -49,6 +50,8 @@ export function isProse(raw: string): boolean {
   if (v.length < 2 || !/\p{L}/u.test(v)) return false;
   if (CJK.test(v)) return true;
   const words = v.split(' ');
+  // 单个全大写的词（MISC、OK）多半是常量
+  if (words.length === 1 && /^[A-Z0-9_]+$/.test(v.replace(/[.!?…]+$/, ''))) return false;
   // 句末标点之外的符号视为代码（选项、样式、条件表达式等）
   if (words.some((w) => CODEISH.test(w.replace(/^["'(“‘*]+|[.,!?…:;"')”’*]+$/g, '')))) return false;
   if (/^["'“‘(]?\p{Lu}/u.test(v) || /[.!?…]["'”’)]?$/.test(v)) return true;
@@ -68,6 +71,8 @@ interface Usage {
   split: Set<string>;
   /** 参数整体（$args）传给了别处，无法逐个判断 */
   whole: boolean;
+  /** 最终作为链接 / 按钮文字显示（推荐分类为「选项」） */
+  link?: boolean;
 }
 
 const LOGIC_KINDS = new Set<TwineEvidenceKind>(['compare', 'key', 'target', 'markup', 'path', 'storedKey']);
@@ -105,24 +110,32 @@ class Analyzer {
     private readonly shownVars: Set<string>,
   ) {}
 
-  /** 宏 name 的第 i 个参数在定义中的用法；没有 <<widget>> 定义时返回 null */
-  usage(name: string, i: number): Usage | null {
+  /** 是否为故事中定义的宏（包括与内置宏同名、被作者覆盖的，如 <<do>>） */
+  isCustom(name: string) {
+    return this.widgets.has(name) || this.scriptMacros.has(name);
+  }
+
+  /**
+   * 宏 name 的参数在定义中的用法；没有定义时返回 null。
+   * path 为 [i] 表示第 i 个参数；[p, i] 表示第 p 个参数（调用方把整个 $args 传进来）的第 i 项。
+   */
+  usage(name: string, path: number[], consts: Record<number, string> = {}): Usage | null {
     const def = this.widgets.get(name);
     const js = def ? undefined : this.scriptMacros.get(name);
     if (!def && !js) return null;
-    const id = `${name}#${i}`;
+    const id = `${name}#${path.join('.')}#${JSON.stringify(consts)}`;
     const hit = this.memo.get(id);
     if (hit) return hit;
     const u: Usage = { kinds: new Map(), split: new Set(), whole: false };
     if (!def) {
-      scanScript(js!, i, u);
+      if (path.length === 1) scanScript(js!, path[0], u);
       this.memo.set(id, u);
       return u;
     }
     if (this.stack.has(id) || this.stack.size > 8) return u; // 递归调用
     this.stack.add(id);
     try {
-      this.scan(def, i, u);
+      this.scan(def, path, u, consts);
     } finally {
       this.stack.delete(id);
     }
@@ -130,30 +143,67 @@ class Analyzer {
     return u;
   }
 
-  private scan(def: WidgetDef, i: number, u: Usage) {
+  private scan(def: WidgetDef, path: number[], u: Usage, consts: Record<number, string>) {
     const { body, tokens } = def;
-    const slices = [...Array(i + 1).keys()].join('|');
-    const direct = `(?:[$_]args\\s*\\[\\s*${i}\\s*\\]|[$_]args\\.slice\\(\\s*(?:${slices})\\s*(?:,[^)]*)?\\))`;
-    // 别名：<<set _x = $args[0]>>、_arr = $args[0].split("|")、<<for _k, _v range _arr>>、_list.push($args[0])
-    const aliases = new Set<string>();
-    const refRe = () => new RegExp(`${direct}${aliases.size ? `|(?<![\\w$])(?:${[...aliases].map(esc).join('|')})(?![\\w$])` : ''}`, 'g');
     const assigns = collectAssignments(tokens, body);
-    for (let changed = true; changed; ) {
-      changed = false;
-      const re = refRe();
-      for (const a of assigns) {
-        if (aliases.has(a.lhs) || !a.lhs.startsWith('_')) continue;
-        re.lastIndex = 0;
-        if (re.test(a.rhs)) {
-          aliases.add(a.lhs);
-          changed = true;
-        }
+    // 调用方传入的字面量参数（如 <<think $args "do">> 的 "do"）：_verb = $args[1] 时 _verb 为常量，用于跳过不会执行的分支
+    const constVars = new Map<string, string>();
+    for (const [k, v] of Object.entries(consts)) {
+      for (const a of assigns) if (new RegExp(`^\\s*[$_]args\\s*\\[\\s*${k}\\s*\\]\\s*$`).test(a.rhs) && a.lhs.startsWith('_')) constVars.set(a.lhs, v);
+    }
+    let direct: string;
+    if (path.length === 1) {
+      const i = path[0];
+      const slices = [...Array(i + 1).keys()].join('|');
+      direct = `(?:[$_]args\\s*\\[\\s*${i}\\s*\\]|[$_]args\\.slice\\(\\s*(?:${slices})\\s*(?:,[^)]*)?\\))`;
+    } else {
+      // 整个 $args 被传进来：$args[p][i]，或 <<set _in = $args[p]>> 之后的 _in[i]
+      const [p, i] = path;
+      const arrays = assigns.filter((x) => new RegExp(`^\\s*[$_]args\\s*\\[\\s*${p}\\s*\\]\\s*$`).test(x.rhs) && x.lhs.startsWith('_')).map((x) => esc(x.lhs));
+      direct = `(?:[$_]args\\s*\\[\\s*${p}\\s*\\]${arrays.length ? `|(?<![\\w$])(?:${arrays.join('|')})` : ''})\\s*\\[\\s*${i}\\s*\\]`;
+    }
+    const aliases = deriveAliases(assigns, direct, new Set());
+    this.scanTokens(body, tokens, refPattern(direct, aliases), u);
+    // 整体传递 $args（如 <<think $args "say">>）：第 i 个参数是被调用宏第 p 个参数的第 i 项
+    if (path.length === 1) {
+      for (const tok of tokens) {
+        if (tok.t !== 'macro' || tok.close || !this.isCustom(tok.name)) continue;
+        const parsed = parseMacroArgs(body, tok.argsStart, tok.argsEnd);
+        const literals: Record<number, string> = {};
+        parsed.forEach((arg, p) => {
+          if (arg.t === 'string') literals[p] = unescapeMacroString(body.slice(arg.contentStart, arg.contentEnd));
+        });
+        parsed.forEach((arg, p) => {
+          if (/^[$_]args$/.test(body.slice(arg.start, arg.end))) this.merge(u, this.usage(tok.name, [p, path[0]], literals), body.slice(tok.start, tok.end), tok.name);
+        });
       }
     }
-    const re = refRe();
+    // 临时变量在同一段落中共享：被调用、没有传参的宏（如 <<do_it>>）也可能读取这里设置的别名
+    if (aliases.size) this.leak(def, aliases, u, new Set([def]), 0, constVars);
+  }
+
+  /** 在被调用的宏中继续追踪临时变量别名 */
+  private leak(from: WidgetDef, aliases: Set<string>, u: Usage, seen: Set<WidgetDef>, depth: number, constVars = new Map<string, string>()) {
+    if (depth > 3) return;
+    for (const tok of liveMacros(from.tokens, from.body, constVars)) {
+      const callee = this.widgets.get(tok.name);
+      if (!callee || seen.has(callee)) continue;
+      seen.add(callee);
+      const names = new Set(aliases);
+      const derived = deriveAliases(collectAssignments(callee.tokens, callee.body), null, names);
+      if (![...derived].some((n) => new RegExp(`(?<![\\w$])${esc(n)}(?![\\w$])`).test(callee.body))) continue;
+      const tmp: Usage = { kinds: new Map(), split: new Set(), whole: false };
+      this.scanTokens(callee.body, callee.tokens, refPattern(null, derived), tmp);
+      for (const [k, e] of tmp.kinds) if (!u.kinds.has(k)) u.kinds.set(k, { ...e, via: e.via ?? tok.name });
+      for (const sp of tmp.split) u.split.add(sp);
+      if (tmp.link) u.link = true;
+      this.leak(callee, derived, u, seen, depth + 1);
+    }
+  }
+
+  private scanTokens(body: string, tokens: TwToken[], re: RegExp, u: Usage) {
     // 整体传递 $args（如 <<think $args "say">>）
     const wholeRe = /[$_]args(?![\w$]|\s*\[|\.slice|\.length)/;
-
     for (const tok of tokens) {
       const src = body.slice(tok.start, tok.end);
       if (tok.t === 'var') {
@@ -187,6 +237,7 @@ class Analyzer {
   }
 
   private add(u: Usage, kind: TwineEvidenceKind, code: string, via?: string) {
+    if (kind === 'link') u.link = true;
     if (!u.kinds.has(kind)) u.kinds.set(kind, { kind, code: snippet(code), ...(via ? { via } : {}) });
   }
 
@@ -194,6 +245,7 @@ class Analyzer {
   private classify(u: Usage, macro: string, args: string, a: number, b: number, code: string, argsStart: number, body: string) {
     const before = args.slice(Math.max(0, a - 60), a);
     const after = args.slice(b, b + 80);
+    const custom = this.isCustom(macro);
     // 赋值的左边（别名本身）
     if ((macro === 'set' || macro === 'capture' || macro === 'run') && /^\s*(?:(?<![=!<>])=(?!=)|\bto\b|[+\-*/]=)/.test(after)) return;
     if (macro === 'for' && /\brange\b/.test(after) && !/\brange\b/.test(before)) return;
@@ -207,12 +259,24 @@ class Analyzer {
     if (EXIST_AFTER.test(after) || EXIST_BEFORE.test(before)) return;
     // _arr.length、_x.includes("a")：比较的是属性或方法的结果，不是这个字符串本身
     if (/^\s*\.length\b/.test(after) || (method && !PRINT_MACROS.has(macro))) return;
-    if (CMP_AFTER.test(after) || CMP_BEFORE.test(before)) return this.add(u, 'compare', code);
+    if (CMP_AFTER.test(after) || CMP_BEFORE.test(before)) {
+      // 与另一个临时变量比较（如 <<if _txtFail != _txtPass>>，判断两句文字是否相同）不算逻辑用法；
+      // 与字符串、故事变量、数值比较才算
+      const other = CMP_AFTER.test(after) ? after.replace(CMP_AFTER, '').trimStart() : (/([^\s(]+)\s*$/.exec(before.replace(CMP_BEFORE, '')) ?? [])[1] ?? '';
+      if (/^_[\w$]*(?![\w$.(\[])/.test(other) || /(?:^|[^\w$.])_[\w$]+$/.test(other)) return;
+      return this.add(u, 'compare', code);
+    }
     if (KEY_CALL.test(before)) return this.add(u, 'key', code);
     if (/\[\s*$/.test(before) && /^\s*\]/.test(after)) return this.add(u, 'key', code);
+    // 拼接成另一个临时变量时，只用分隔符连接（<<set _key = passage() + "__" + _x>>）得到的是另一个值，不影响这段文字本身；
+    // 拼进路径（"images/" + _x + ".png"）仍为逻辑值
+    const setLike = macro === 'set' || macro === 'run' || macro === 'capture';
+    const tempTarget = setLike && /(?:^|[,;])\s*_[\w$]*\s*(?:(?<![=!<>])=(?!=)|\bto\b)[^,;]*$/.test(args.slice(0, a));
+    const lits = concatLiterals(before, after);
+    const keep = (l: string | undefined) => (tempTarget && l !== undefined && !/\p{L}/u.test(l) ? undefined : l);
     // 字符串拼接：紧邻的字面量是标签 / 属性 / 路径时为逻辑值（"<"+_tag+">"、"images/"+_x+".png"）
-    const litBefore = /(["'])((?:(?!\1)[^\n])*)\1\s*\+\s*$/.exec(before)?.[2];
-    const litAfter = /^\s*\+\s*(["'])((?:(?!\1)[^\n])*)\1/.exec(after)?.[2];
+    const litBefore = keep(lits.litBefore);
+    const litAfter = keep(lits.litAfter);
     if ((litBefore !== undefined && /(?:<\/?|=\s*["']?|\bclass\s*=\s*["']?[^"']*)$/.test(litBefore)) || (litAfter !== undefined && /^[^\s<>]*["']/.test(litAfter))) {
       return this.add(u, 'markup', code);
     }
@@ -229,25 +293,32 @@ class Analyzer {
       if (lhs) this.stored(u, lhs[1], code);
       return;
     }
-    if (PRINT_MACROS.has(macro)) return this.add(u, 'print', code);
-    if (TARGET_MACROS.has(macro)) return this.add(u, 'target', code);
+    if (!custom && PRINT_MACROS.has(macro)) return this.add(u, 'print', code);
+    if (!custom && TARGET_MACROS.has(macro)) return this.add(u, 'target', code);
 
     // 作为整个参数传给另一个宏
     const parsed = parseMacroArgs(body, argsStart, argsStart + args.length);
     const pos = parsed.findIndex((p) => p.start - argsStart === a && p.end - argsStart === b);
     if (pos < 0) return;
-    const rule = BUILTIN_RULES.get(macro);
+    const rule = custom ? undefined : BUILTIN_RULES.get(macro);
     if (rule) {
       if (rule.args === 'all' || rule.args.includes(pos)) return this.add(u, 'link', code);
       if (LINK_TARGET_MACROS.has(macro)) this.add(u, 'target', code);
       return;
     }
-    if (TWINE_BUILTIN_MACROS.has(macro)) return;
-    const inner = this.usage(macro, pos);
+    if (!custom) return;
+    this.merge(u, this.usage(macro, [pos]), code, macro);
+  }
+
+  /** 把被调用宏中参数的用途并入当前参数 */
+  private merge(u: Usage, inner: Usage | null, code: string, macro: string) {
     if (!inner) return;
     for (const s of inner.split) u.split.add(s);
     const v = verdictOf(inner);
-    if (v === 'display') return this.add(u, 'call', code, macro);
+    if (v === 'display') {
+      if (inner.link) u.link = true;
+      return this.add(u, 'call', code, macro);
+    }
     if (v === 'logic') {
       const ev = [...inner.kinds.values()].find((e) => LOGIC_KINDS.has(e.kind))!;
       return this.add(u, ev.kind, code, macro);
@@ -264,6 +335,86 @@ class Analyzer {
     if (this.shownVars.has(name)) return this.add(u, 'shown', code);
     this.add(u, 'store', code);
   }
+}
+
+/** 判断 <<if _verb == "say">> 这类条件：变量为已知常量时返回真假，否则返回 null */
+function evalCondition(cond: string, constVars: Map<string, string>): boolean | null {
+  const m = /^\s*(_[\w$]+)\s*(===?|!==?|\bis\b|\bisnot\b|\beq\b|\bneq\b)\s*(["'])((?:(?!\3).)*)\3\s*$/.exec(cond);
+  if (!m || !constVars.has(m[1])) return null;
+  const eq = constVars.get(m[1]) === m[4];
+  return /^(?:===?|is|eq)$/.test(m[2]) ? eq : !eq;
+}
+
+/** 宏调用，跳过按常量判断不会执行的 <<if>> / <<elseif>> / <<else>> 分支 */
+function liveMacros(tokens: TwToken[], body: string, constVars: Map<string, string>) {
+  const out: Extract<TwToken, { t: 'macro' }>[] = [];
+  const frames: { taken: boolean; live: boolean }[] = [];
+  const live = () => frames.every((f) => f.live);
+  for (const tok of tokens) {
+    if (tok.t !== 'macro') continue;
+    const cond = body.slice(tok.argsStart, tok.argsEnd);
+    if (tok.close) {
+      if (tok.name === 'if') frames.pop();
+      continue;
+    }
+    if (tok.name === 'if') {
+      const v = constVars.size ? evalCondition(cond, constVars) : null;
+      frames.push({ taken: v === true, live: v !== false });
+      continue;
+    }
+    const top = frames[frames.length - 1];
+    if (top && tok.name === 'elseif') {
+      const v = top.taken ? false : constVars.size ? evalCondition(cond, constVars) : null;
+      top.live = v !== false;
+      top.taken ||= v === true;
+      continue;
+    }
+    if (top && tok.name === 'else') {
+      top.live = !top.taken;
+      continue;
+    }
+    if (live()) out.push(tok);
+  }
+  return out;
+}
+
+/** 紧邻引用的字符串拼接字面量（"lit" + ref、ref + "lit"） */
+function concatLiterals(before: string, after: string) {
+  return {
+    litBefore: /(["'])((?:(?!\1)[^\n])*)\1\s*\+\s*$/.exec(before)?.[2],
+    litAfter: /^\s*\+\s*(["'])((?:(?!\1)[^\n])*)\1/.exec(after)?.[2],
+  };
+}
+
+/** 引用的正则：直接引用（$args[i] 等）或别名 */
+function refPattern(direct: string | null, aliases: Set<string>): RegExp {
+  const parts = [...(direct ? [direct] : []), ...(aliases.size ? [`(?<![\\w$])(?:${[...aliases].map(esc).join('|')})(?![\\w$])`] : [])];
+  return new RegExp(parts.length ? parts.join('|') : '(?!)', 'g');
+}
+
+/**
+ * 由赋值推导别名（_x = $args[0]、_y = _x.sayOne()），从 seed 开始直到不再增加。
+ * 拼接成键的赋值（_key = passage() + "__" + _x）不算别名：结果是另一个值。
+ */
+function deriveAliases(assigns: { lhs: string; rhs: string }[], direct: string | null, seed: Set<string>): Set<string> {
+  const aliases = new Set(seed);
+  for (let changed = true; changed; ) {
+    changed = false;
+    const re = refPattern(direct, aliases);
+    for (const a of assigns) {
+      if (aliases.has(a.lhs) || !a.lhs.startsWith('_')) continue;
+      re.lastIndex = 0;
+      for (let m = re.exec(a.rhs); m; m = re.exec(a.rhs)) {
+        const { litBefore, litAfter } = concatLiterals(a.rhs.slice(Math.max(0, m.index - 60), m.index), a.rhs.slice(m.index + m[0].length, m.index + m[0].length + 80));
+        const keyish = [litBefore, litAfter].some((l) => l !== undefined && l !== '' && !/\s/.test(l));
+        if (keyish) continue;
+        aliases.add(a.lhs);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return aliases;
 }
 
 /**
@@ -396,6 +547,15 @@ function braceBody(js: string, open: number): string {
   return js.slice(open + 1, open + 2000);
 }
 
+interface PrefixAcc {
+  count: number;
+  prose: number;
+  samples: string[];
+}
+
+/** 选项参数的前缀：response:、set:REPLY:（可以连续多个），前缀由字母开头 */
+const PREFIX = /^((?:!?[A-Za-z][\w-]*:)+)([\s\S]*)$/;
+
 interface ArgAcc {
   strings: number;
   prose: number;
@@ -408,13 +568,14 @@ const MAX_SAMPLES = 5;
 
 /** 统计所有故事文件中的自定义宏，推荐「哪个参数是显示文字、哪个是说话人」 */
 export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[]): TwineMacroStat[] {
-  const acc = new Map<string, { uses: number; args: ArgAcc[] }>();
+  const acc = new Map<string, { uses: number; args: ArgAcc[]; prefixes: Map<string, Map<number, PrefixAcc>> }>();
   const widgets = new Map<string, WidgetDef>();
   const scriptMacros = new Map<string, string>();
   const splitMethods = new Map<string, string[]>();
   const keyedVars = new Set<string>();
   const shownVars = new Set<string>();
   const texts: string[] = [];
+  const passages: { text: string; tokens: TwToken[] }[] = [];
 
   for (const f of files) {
     let story: ReturnType<typeof readStory>['story'];
@@ -450,35 +611,55 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
         const body = p.text.slice(t.end, end > 0 ? tokens[end].start : p.text.length);
         widgets.set(name, { body, tokens: lexSugarCube(body) });
       }
-      for (const tok of tokens) {
-        if (tok.t !== 'macro' || tok.close) continue;
-        if (TWINE_BUILTIN_MACROS.has(tok.name) || /^end\w+$/.test(tok.name)) continue;
-        const args = parseMacroArgs(p.text, tok.argsStart, tok.argsEnd);
-        let a = acc.get(tok.name);
-        if (!a) acc.set(tok.name, (a = { uses: 0, args: [] }));
-        a.uses++;
-        args.slice(0, 16).forEach((arg, i) => {
-          const s = (a!.args[i] ??= { strings: 0, prose: 0, bare: 0, values: new Set(), samples: [] });
-          if (arg.t === 'string') {
-            const v = unescapeMacroString(p.text.slice(arg.contentStart, arg.contentEnd));
-            s.strings++;
-            if (isProse(v)) {
-              s.prose++;
-              if (s.samples.length < MAX_SAMPLES && !s.samples.includes(v)) s.samples.push(v.length > 160 ? `${v.slice(0, 159)}…` : v);
+      passages.push({ text: p.text, tokens });
+    }
+  }
+
+  // 使用次数与参数统计（作者覆盖了内置宏名的，如 <<widget "do">>，也算自定义宏）
+  const isCustom = (name: string) => widgets.has(name) || scriptMacros.has(name);
+  for (const p of passages) {
+    const { tokens } = p;
+    for (const tok of tokens) {
+      if (tok.t !== 'macro' || tok.close) continue;
+      if (!isCustom(tok.name) && (TWINE_BUILTIN_MACROS.has(tok.name) || /^end\w+$/.test(tok.name))) continue;
+      const args = parseMacroArgs(p.text, tok.argsStart, tok.argsEnd);
+      let a = acc.get(tok.name);
+      if (!a) acc.set(tok.name, (a = { uses: 0, args: [], prefixes: new Map() }));
+      a.uses++;
+      args.slice(0, 16).forEach((arg, i) => {
+        const s = (a!.args[i] ??= { strings: 0, prose: 0, bare: 0, values: new Set(), samples: [] });
+        if (arg.t === 'string') {
+          const v = unescapeMacroString(p.text.slice(arg.contentStart, arg.contentEnd));
+          s.strings++;
+          const pm = PREFIX.exec(v);
+          if (pm) {
+            const byIdx = a!.prefixes.get(pm[1]) ?? new Map<number, PrefixAcc>();
+            a!.prefixes.set(pm[1], byIdx);
+            const pa = byIdx.get(i) ?? { count: 0, prose: 0, samples: [] };
+            byIdx.set(i, pa);
+            pa.count++;
+            if (isProse(pm[2])) {
+              pa.prose++;
+              if (pa.samples.length < MAX_SAMPLES && !pa.samples.includes(pm[2])) pa.samples.push(pm[2].length > 160 ? `${pm[2].slice(0, 159)}…` : pm[2]);
             }
-          } else if (arg.t === 'bare') {
-            s.bare++;
-            if (s.values.size <= 200) s.values.add(p.text.slice(arg.start, arg.end));
           }
-        });
-      }
+          if (isProse(v)) {
+            s.prose++;
+            if (s.samples.length < MAX_SAMPLES && !s.samples.includes(v)) s.samples.push(v.length > 160 ? `${v.slice(0, 159)}…` : v);
+          }
+        } else if (arg.t === 'bare') {
+          s.bare++;
+          if (s.values.size <= 200) s.values.add(p.text.slice(arg.start, arg.end));
+        }
+      });
     }
   }
 
   // 故事变量在别处的用法：$list.includes("…") 为按字符串查找；<<print $x>>、range $x 为输出
   const all = texts.join('\n');
-  for (const m of all.matchAll(/\$([\w$]+)\.(?:includes|indexOf|includesAny|includesAll|delete|contains|count)\(\s*["'`]/g)) keyedVars.add(m[1]);
-  for (const m of all.matchAll(/\$([\w$]+)\s*(?:===?|!==?|\bis\b|\bisnot\b|\beq\b)\s*["'`]/g)) keyedVars.add(m[1]);
+  for (const m of all.matchAll(/\$([\w$]+)\.(?:includes|indexOf|includesAny|includesAll|delete|contains|count)\(\s*(["'`])(?!\2)/g)) keyedVars.add(m[1]);
+  // 与空字符串比较是判断是否为空，不算按字符串查找
+  for (const m of all.matchAll(/\$([\w$]+)\s*(?:===?|!==?|\bis\b|\bisnot\b|\beq\b)\s*(["'`])(?!\2)/g)) keyedVars.add(m[1]);
   for (const m of all.matchAll(/State\.variables\.([\w$]+)\.(?:includes|indexOf)\(\s*["'`]/g)) keyedVars.add(m[1]);
   for (const m of all.matchAll(/<<(?:print|=|-)\s+\$([\w$]+)|\brange\s+\$([\w$]+)|\$([\w$]+)\.(?:random|first|last|join|pluck|sayOne|sayIt)\(/g)) shownVars.add(m[1] ?? m[2] ?? m[3]);
 
@@ -488,9 +669,11 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
     if (!a.args.some((s) => s?.strings)) continue;
     const source: TwineMacroStat['source'] = widgets.has(name) ? 'widget' : scriptMacros.has(name) ? 'script' : 'none';
     const args: TwineArgStat[] = [];
+    const linkArgs = new Set<number>();
     a.args.forEach((s, i) => {
       if (!s) return;
-      const u = analyzer.usage(name, i);
+      const u = analyzer.usage(name, [i]);
+      if (u?.link) linkArgs.add(i);
       let verdict: TwineArgVerdict = u ? verdictOf(u) : 'unknown';
       // $args 整体传给 JavaScript 或其他宏（如 <<think $args>>），又没有单独证据时无法判断
       if (u && u.whole && !u.kinds.size) verdict = 'unknown';
@@ -505,7 +688,28 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
       }
     });
     const textArgs = args.filter((s) => s.recommend).map((s) => s.i);
+    // 带前缀的文字：只统计不是文字参数的位置；前缀后多数是句子才推荐
+    const prefixes: TwinePrefixStat[] = [];
+    for (const [prefix, byIdx] of a.prefixes) {
+      const st = { prefix, count: 0, prose: 0, samples: [] as string[], recommend: false };
+      for (const [i, pa] of byIdx) {
+        if (textArgs.includes(i)) continue;
+        st.count += pa.count;
+        st.prose += pa.prose;
+        for (const x of pa.samples) if (st.samples.length < MAX_SAMPLES && !st.samples.includes(x)) st.samples.push(x);
+      }
+      if (!st.prose) continue;
+      // set:变量:值 / push:数组:值：看该变量在别处是被按字符串查找（键）还是被输出
+      const target = /^!?[A-Za-z][\w-]*:([A-Za-z_$][\w$]*):$/.exec(prefix)?.[1];
+      if (target && keyedVars.has(target)) st.recommend = false;
+      else if (target && shownVars.has(target)) st.recommend = true;
+      else st.recommend = st.prose >= 2 && st.prose >= st.count * 0.8;
+      prefixes.push(st);
+    }
+    prefixes.sort((x, y) => y.prose - x.prose);
+    const prefixList = prefixes.filter((x) => x.recommend).map((x) => x.prefix);
     let suggested: TwineMacroRule | null = null;
+    if (!textArgs.length && prefixList.length) suggested = { name, args: [], prefixes: prefixList };
     if (textArgs.length) {
       // 说话人：文字之前、几乎每次都出现、取值种类少的非字符串参数（如 <<say ms "…">> 的 ms）
       // 取值须像代号（ms、mc），不是数字或变量；在宏定义中被直接显示的参数不是代号
@@ -521,11 +725,23 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
           args.find((x) => x.i === i)?.verdict !== 'display',
       );
       const split = [...new Set(textArgs.flatMap((i) => args.find((x) => x.i === i)!.split ?? []))];
-      suggested = { name, args: textArgs, ...(sp >= 0 ? { speaker: sp } : {}), ...(split.length ? { split } : {}) };
+      // 文字最终作为链接 / 按钮显示时推荐分类为「选项」
+      const choice = textArgs.every((i) => linkArgs.has(i));
+      suggested = {
+        name,
+        args: textArgs,
+        ...(sp >= 0 ? { speaker: sp } : {}),
+        ...(choice && sp < 0 ? { category: 'choice' as const } : {}),
+        ...(split.length ? { split } : {}),
+        ...(prefixList.length ? { prefixes: prefixList } : {}),
+      };
     }
+    // 推荐翻译的参数都由定义判断为显示文字时为高把握；其余无法判断的参数（如 goto:xxx 这类选项）不影响
+    const recommended = args.filter((s) => s.recommend);
     const withText = args.filter((s) => s.strings > 0);
-    const confident = source !== 'none' && withText.length > 0 && withText.every((s) => s.verdict === 'display' || s.verdict === 'logic');
-    out.push({ name, uses: a.uses, source, args, suggested, confidence: confident ? 'high' : 'low' });
+    const confident =
+      source !== 'none' && (recommended.length ? recommended.every((s) => s.verdict === 'display') : withText.length > 0 && withText.every((s) => s.verdict === 'display' || s.verdict === 'logic'));
+    out.push({ name, uses: a.uses, source, args, prefixes, suggested, confidence: confident ? 'high' : 'low' });
   }
   // 推荐的排前面，其次按使用次数
   return out.sort((x, y) => Number(!!y.suggested) - Number(!!x.suggested) || y.uses - x.uses || x.name.localeCompare(y.name));

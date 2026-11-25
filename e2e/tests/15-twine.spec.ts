@@ -16,8 +16,8 @@ function storyHtml() {
         '<<say ab "Brother, you came at last.">>',
         '<<say ab "Please, follow me inside.">>',
         '<<say mc "Lead the way.">>',
-        '<<but "Enter the hall" Hall>>',
-        '<<but "Look around first" Yard>>',
+        '<<but "Enter the hall" Hall "response:The hall is cold and dark.">>',
+        '<<but "Look around first" Yard "response:You see nothing unusual.">>',
         '<<but "Wait at the gate" Start>>',
         '[[Read the notice|Notice]]',
         '<<met "Abbot Joseph">><<met "Sister Agnes">>',
@@ -96,11 +96,15 @@ test('上传后提示待确认的自定义宏；按定义判断用途，确认�
   // <<chat>>：按 split() 拆分
   await expect(item('chat')).toContainText('按 “///” “|” 拆成多条词条');
   await expect(item('chat')).toContainText('将提取 6 条');
+  // <<but>> 其他参数中带前缀的文字：按内容推荐 response:
+  await expect(item('but').locator('.twine-prefixes')).toContainText('response:');
+  await expect(item('but').getByLabel('but response:')).toBeChecked();
+  await expect(item('but')).toContainText('将提取 5 条');
   // <<met>>：存入的变量在别处按字符串查找，是逻辑值，不推荐
   await card.getByText(/^全部 \d+$/).click();
   await expect(item('met')).toContainText('逻辑值');
   await expect(item('met')).toContainText('存入变量，变量在别处按字符串查找');
-  await expect(card).toContainText(/保存后共 \d+ 条词条（新增 12 条，移除 0 条）/);
+  await expect(card).toContainText(/保存后共 \d+ 条词条（新增 14 条，移除 0 条）/);
 
   await btn(card, '保存并重新提取').click();
   await expect(toast(page, '宏规则已保存，已开始重新提取')).toBeVisible();
@@ -112,7 +116,7 @@ test('上传后提示待确认的自定义宏；按定义判断用途，确认�
   const rules = await owner.api.ok('GET', `/projects/${pid}/twine/rules`);
   expect(rules.macros).toEqual(
     expect.arrayContaining([
-      { name: 'but', args: [0] },
+      { name: 'but', args: [0], category: 'choice', prefixes: ['response:'] },
       { name: 'say', args: [1], speaker: 0 },
       { name: 'chat', args: [0], split: ['///', '|'] },
     ]),
@@ -121,6 +125,7 @@ test('上传后提示待确认的自定义宏；按定义判断用途，确认�
   expect(rules.ignored).toEqual(['met']);
   await owner.api.findEntry(pid, 'Brother, you came at last.');
   await owner.api.findEntry(pid, 'Enter the hall');
+  await owner.api.findEntry(pid, 'The hall is cold and dark.');
   await owner.api.findEntry(pid, 'He nods.');
   await owner.api.findEntry(pid, 'Come in, quickly.');
   const met = await owner.api.call('GET', `/projects/${pid}/entries?q=${encodeURIComponent('Abbot Joseph')}&field=original`);

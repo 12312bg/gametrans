@@ -227,6 +227,20 @@ describe('自定义宏推荐', () => {
     expect(say).toMatchObject({ uses: 12, defined: true, suggested: { name: 'say', args: [1], speaker: 0 } });
     expect(stats.find((s) => s.name === 'but')!.suggested).toEqual({ name: 'but', args: [0] });
     expect(stats.find((s) => s.name === 'mi')!.suggested).toBeNull();
+    // 小写开头的短语也算显示文字（如链接文字），样式参数不算
+    const prey = analyzeTwineMacros([
+      {
+        path: 'index.html',
+        bytes: storyHtml([
+          {
+            name: 'Prey',
+            text: ['a sister of many', 'a woman waiting at a motel', 'a thief', 'a drunken lush'].map((x, i) => `<<preylink "${x}" girl${i} many>>\n<<mi "x" "center special">>`).join('\n'),
+          },
+        ]),
+      },
+    ]);
+    expect(prey.find((s) => s.name === 'preylink')!.suggested).toEqual({ name: 'preylink', args: [0] });
+    expect(prey.find((s) => s.name === 'mi')!.suggested).toBeNull();
     // 内置宏不在统计中
     expect(stats.some((s) => s.name === 'widget' || s.name === 'link')).toBe(false);
   });

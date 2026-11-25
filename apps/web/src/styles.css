@@ -1694,10 +1694,75 @@ button.scene-row {
   }
 }
 
-/* Twine 宏分析：参数示例单行截断 */
-.twine-analysis .ellipsis {
+/* Twine：确认自定义宏 */
+.twine-review .ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 420px;
+}
+.twine-macro-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.twine-macro-name {
+  font-weight: 600;
+}
+.twine-args {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.twine-arg {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--gt-subtle-bg, rgba(127, 127, 127, 0.06));
+}
+.twine-arg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.twine-arg-body {
+  min-width: 0;
+}
+.twine-samples {
+  margin-bottom: 2px;
+}
+.twine-evidence code {
+  word-break: break-all;
+}
+.twine-evidence .ev-logic {
+  color: #dc2626;
+}
+.twine-evidence .ev-display {
+  color: #16a34a;
+}
+.twine-macro-foot {
+  margin-top: 8px;
+}
+.twine-review-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 0 2px;
+  background: var(--ant-color-bg-container, #fff);
+  border-top: 1px solid rgba(127, 127, 127, 0.15);
+}
+@media (max-width: 760px) {
+  .twine-arg {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

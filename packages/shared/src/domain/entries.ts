@@ -35,11 +35,29 @@ export const BATCH_ACTION_PERMISSION: Record<BatchAction, Permission> = {
   clear: P.MANAGE_ENTRIES,
 };
 
-export const ENTRY_CATEGORIES = [
+/** RPG Maker 的词条分类 */
+export const RPG_MAKER_CATEGORIES = [
   'dialogue', 'choice', 'scroll', 'speaker', 'name', 'nickname', 'description',
   'message', 'system', 'map', 'mapName', 'variable', 'eventName', 'comment', 'note', 'script', 'plugin', 'other',
 ] as const;
-export type EntryCategory = (typeof ENTRY_CATEGORIES)[number];
+
+/**
+ * Twine 的词条分类：正文（段落中的叙述）、对话（带说话人的宏）、链接文字、选项 / 按钮（<<link>>、<<button>> 等）、
+ * 说话人、界面文字（StoryCaption、StoryMenu 等特殊段落）、脚本字符串
+ */
+export const TWINE_CATEGORIES = ['passage', 'dialogue', 'link', 'choice', 'speaker', 'ui', 'script', 'other'] as const;
+
+/** 全部分类（各引擎的并集），用于校验与数据库中的取值 */
+export const ENTRY_CATEGORIES = [...new Set([...RPG_MAKER_CATEGORIES, ...TWINE_CATEGORIES])] as (
+  | (typeof RPG_MAKER_CATEGORIES)[number]
+  | (typeof TWINE_CATEGORIES)[number]
+)[];
+export type EntryCategory = (typeof RPG_MAKER_CATEGORIES)[number] | (typeof TWINE_CATEGORIES)[number];
+
+/** 项目引擎可能出现的分类（翻译页的分类筛选按此列出） */
+export function categoriesFor(engine: Engine): readonly EntryCategory[] {
+  return engine === 'TWINE' ? TWINE_CATEGORIES : RPG_MAKER_CATEGORIES;
+}
 
 /** 默认隐藏的危险分类 */
 export const DANGER_CATEGORIES: EntryCategory[] = ['mapName', 'variable', 'eventName', 'comment', 'note', 'script', 'plugin'];

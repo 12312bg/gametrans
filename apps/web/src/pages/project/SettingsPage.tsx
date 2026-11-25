@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Card, Form, Input, Modal, Radio, Select, Space, Typography } from 'antd';
 import { ENGINE_NAMES, PERMISSIONS } from '@gametrans/shared';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useProject } from '../../api/project';
 import type { Member } from '../../api/types';
@@ -34,6 +34,11 @@ export default function SettingsPage() {
   const canOwn = has(PERMISSIONS.DELETE_PROJECT);
   const members = useQuery({ queryKey: ['members', pid], queryFn: () => api<Member[]>(`/projects/${pid}/members`), enabled: canOwn });
   const languages = langOptions(t);
+  const { hash } = useLocation();
+  // 从「发现自定义宏」提示跳转过来时滚动到宏规则
+  useEffect(() => {
+    if (hash === '#twine-rules') setTimeout(() => document.getElementById('twine-rules')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  }, [hash]);
 
   if (!has(PERMISSIONS.MANAGE_PROJECT)) {
     return <Typography.Text type="secondary">{t('settings.adminOnly')}</Typography.Text>;

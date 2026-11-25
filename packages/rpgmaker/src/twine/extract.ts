@@ -110,7 +110,8 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
       set: (v) => out.edits.push({ start, end, value: write(v) }),
     });
   };
-  const textCategory: EntryCategory = SYSTEM_PASSAGES.has(p.name) ? 'system' : 'dialogue';
+  const ui = SYSTEM_PASSAGES.has(p.name);
+  const textCategory: EntryCategory = ui ? 'ui' : 'passage';
 
   // 脚本段落（twee 中带 script 标签）：只提取字符串
   if (p.tags.includes('script')) {
@@ -178,7 +179,7 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
     const hasWord = body.some((t) => (t.t === 'text' ? HAS_WORD.test(text.slice(t.start, t.end)) : t.t === 'link' && HAS_WORD.test(text.slice(t.link.labelStart, t.link.labelEnd))));
     if (!hasWord) return;
     const line = lineOf(body[0].start);
-    if (body.length === 1 && body[0].t === 'link') return emitLink(body[0].link, line, 'choice');
+    if (body.length === 1 && body[0].t === 'link') return emitLink(body[0].link, line, ui ? 'ui' : 'link');
 
     let start = body[0].start;
     let end = body[body.length - 1].end;
@@ -200,7 +201,8 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
   const emitRuleArgs = (tok: Extract<TwToken, { t: 'macro' }>, rule: TwineMacroRule) => {
     const args = parseMacroArgs(text, tok.argsStart, tok.argsEnd);
     const line = lineOf(tok.start);
-    const category: EntryCategory = rule.category ?? 'dialogue';
+    // 未指定分类：有说话人参数的为对话，否则为正文；界面段落中的一律为界面文字
+    const category: EntryCategory = ui ? 'ui' : rule.category ?? (rule.speaker !== undefined ? 'dialogue' : 'passage');
     let speaker: string | undefined;
     if (rule.speaker !== undefined && args[rule.speaker]) speaker = argText(text, args[rule.speaker]);
     const indexes = rule.args === 'all' ? args.map((_, i) => i) : [...rule.args];
@@ -222,7 +224,22 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
         const value = unescapeMacroString(text.slice(arg.contentStart, arg.contentEnd));
         if (!HAS_WORD.test(stripMarkup(value))) continue;
         const quote = arg.quote;
-        emit(arg.contentStart, arg.contentEnd, value, detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker), cat, false, (v) => escapeMacroString(v, quote));
+        const detail = detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker);
+        const parts = rule.split?.length && i !== rule.speaker ? splitParts(value, rule.split) : null;
+        if (!parts || parts.length === 1) {
+          emit(arg.contentStart, arg.contentEnd, value, detail, cat, false, (v) => escapeMacroString(v, quote));
+          continue;
+        }
+        // 按分隔符拆成多条词条：每条写回时更新对应片段，整个字符串用原分隔符拼接（同一位置以最后一次写入为准）
+        parts.forEach((part, k) => {
+          if (part.sep || !HAS_WORD.test(stripMarkup(part.text))) return;
+          const lead = /^\s*/.exec(part.text)![0];
+          const trail = /\s*$/.exec(part.text.slice(lead.length))![0];
+          emit(arg.contentStart, arg.contentEnd, part.text.trim(), detail, cat, false, (v) => {
+            parts[k] = { text: lead + v + trail };
+            return escapeMacroString(parts.map((x) => x.text).join(''), quote);
+          });
+        });
       }
     }
   };
@@ -283,6 +300,12 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
     }
   }
   flush();
+}
+
+/** 按分隔符拆分（长的优先），分隔符本身也作为片段保留 */
+function splitParts(value: string, seps: string[]): { text: string; sep?: boolean }[] {
+  const re = new RegExp(`(${[...seps].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
+  return value.split(re).map((text, k) => (k % 2 ? { text, sep: true } : { text }));
 }
 
 /** 去掉标记后的文字（判断是否有需要翻译的内容） */

@@ -62,10 +62,12 @@ describe('Twine（SugarCube）提取', () => {
     expect(kind).toBe('story');
     const originals = entries.map((e) => e.original);
     expect(originals).toContain('You enter the chapel.');
+    expect(byOriginal(entries, 'You enter the chapel.')?.category).toBe('passage');
+    expect(byOriginal(entries, 'Ring the bell')?.category).toBe('choice');
     // 行内的宏与变量保留在词条中
     expect(originals).toContain('Hello, <<print $name>>! You have $gold coins.');
     // 单独一行的链接只提取显示文字
-    expect(byOriginal(entries, 'Go to the hall')?.category).toBe('choice');
+    expect(byOriginal(entries, 'Go to the hall')?.category).toBe('link');
     expect(byOriginal(entries, 'Library')?.context[1]).toEqual({ k: 'ctx.tw.link', p: { target: 'Library', n: 4 } });
     // 句中的 [[目标]] 规范为 [[文字|目标]]
     expect(originals).toContain('Walk to the [[garden|Garden]] or stay.');
@@ -84,7 +86,7 @@ describe('Twine（SugarCube）提取', () => {
     expect(originals.some((o) => o.includes('color'))).toBe(false);
   });
 
-  it('脚本字符串默认隐藏，特殊段落归为系统', () => {
+  it('脚本字符串默认隐藏，特殊段落归为界面文字', () => {
     const { entries } = extractEntries('index.html', STORY, 'TWINE', CONFIG);
     const title = byOriginal(entries, 'Sister Agnes');
     expect(title).toMatchObject({ category: 'script', danger: true });
@@ -92,8 +94,8 @@ describe('Twine（SugarCube）提取', () => {
     const greeting = byOriginal(entries, 'Welcome back');
     expect(greeting).toMatchObject({ key: 'script/0', category: 'script', danger: true });
     expect(greeting?.context).toEqual([{ k: 'ctx.tw.storyScript', p: { n: 2 } }]);
-    expect(byOriginal(entries, 'Day $day')?.category).toBe('system');
-    expect(byOriginal(entries, 'Journal')?.category).toBe('choice');
+    expect(byOriginal(entries, 'Day $day')?.category).toBe('ui');
+    expect(byOriginal(entries, 'Journal')?.category).toBe('ui');
     // 页面上的引擎脚本不属于故事，不提取
     expect(entries.some((e) => e.original.includes('not a macro'))).toBe(false);
   });
@@ -105,6 +107,13 @@ describe('Twine（SugarCube）提取', () => {
     expect(byOriginal(entries, '<b>Blessed</b> are you.')?.branch).toEqual([{ k: 'macro', name: 'if', args: '$faith > 2' }]);
     expect(byOriginal(entries, 'You enter the chapel.')?.branch).toBeUndefined();
     expect(byOriginal(entries, 'A long & dark hall.')?.context[0]).toEqual({ k: 'ctx.tw.passageTags', p: { name: 'Hall', tags: 'room' } });
+  });
+
+  it('宏规则未指定分类时：有说话人为对话，否则为正文；可指定为选项', () => {
+    const cat = (config: ParserConfig) => byOriginal(extractEntries('index.html', STORY, 'TWINE', config).entries, 'I\'d like to "help" you.')?.category;
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1], speaker: 0 }] } })).toBe('dialogue');
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1] }] } })).toBe('passage');
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1], category: 'choice' }] } })).toBe('choice');
   });
 
   it('没有规则时自定义宏不提取', () => {
@@ -224,7 +233,7 @@ describe('自定义宏推荐', () => {
     ]);
     const stats = analyzeTwineMacros([{ path: 'index.html', bytes: story }]);
     const say = stats.find((s) => s.name === 'say')!;
-    expect(say).toMatchObject({ uses: 12, defined: true, suggested: { name: 'say', args: [1], speaker: 0 } });
+    expect(say).toMatchObject({ uses: 12, source: 'widget', confidence: 'low', suggested: { name: 'say', args: [1], speaker: 0 } });
     expect(stats.find((s) => s.name === 'but')!.suggested).toEqual({ name: 'but', args: [0] });
     expect(stats.find((s) => s.name === 'mi')!.suggested).toBeNull();
     // 小写开头的短语也算显示文字（如链接文字），样式参数不算
@@ -243,5 +252,102 @@ describe('自定义宏推荐', () => {
     expect(prey.find((s) => s.name === 'mi')!.suggested).toBeNull();
     // 内置宏不在统计中
     expect(stats.some((s) => s.name === 'widget' || s.name === 'link')).toBe(false);
+  });
+});
+
+describe('按宏定义判断参数用途', () => {
+  const WIDGETS = [
+    '<<widget "unrelated">><<if $wife==$args[0] or $harem.includes($args[0])>><<set _UNRELATED=0>><<else>><<set _UNRELATED=1>><</if>><</widget>>',
+    '<<widget "linker">><<link $args[0]>><<goto $args[1]>><</link>><</widget>>',
+    '<<widget "preylink">><<set _words = $args[0], _link = $args[1], 0>><<set _classes = "preylink "+$args.slice(2).join(" ")>><<linker _words _link>><</widget>>',
+    '<<widget "convo">><<set _array = $args[0].split("|")>><<for _a,_line range _array>><<set _quote = _line.split("///")[0]>><<set _prose = _line.split("///")[1]>><<quo _quote>><<= _prose ? _prose : "">><</for>><</widget>>',
+    '<<widget "quo">><<= "<span>" + $args[0] + "</span>">><</widget>>',
+    '<<widget "goodsex">><<set _girlface = $args[1]?$args[1]:"nobody">><<set $goodsexArray.pushUnique(_girlface)>><<if $level >= $args[0]>><<= $args[2]?$args[2]:"">><<else>><<= $args[3]?$args[3]:"">><</if>><</widget>>',
+    '<<widget "headline">><<set $headlines.pushUnique($args[0])>><</widget>>',
+    '<<widget "happen">><<set $HAPPENED.pushUnique($args[0])>><</widget>>',
+    '<<widget "girlpic">><<set _url = "images/in/" + $args[0] + ".png">><<image _url>><</widget>>',
+    '<<widget "image">><</widget>>',
+    '<<widget "mindread">><<if typeof $args[0] !== "undefined">><span>"_thought"</span><</if>><<set _thought = $args[0]>><</widget>>',
+  ].join('\n');
+  const SCRIPT = [
+    "Macro.add('speech', { tags: null, handler: function () {",
+    '  var id = this.args[0], name = id;',
+    '  if (this.args.length > 1) name = this.args[1];',
+    "  var output = '<div class=\"speech ' + id + '\">';",
+    "  output += name + '<hr>' + this.payload[0].contents + '</div>';",
+    '  $(this.output).wiki(output);',
+    '} });',
+  ].join('\n');
+  const uses = [
+    '<<unrelated "Joy Smith">><<unrelated "Jean (motel)">><<unrelated "Val (blonde drunk)">>',
+    '<<preylink "a sister of many" multiGirl many>><<preylink "a thief" thiefGirl>><<preylink "a drunken lush" drunkGirl>>',
+    '<<convo "Hello there.///She smiles.|How are you today?">><<convo "Goodnight daddy.|Sleep well, sweetie.">>',
+    '<<goodsex 10 "Faith Smith" "You did it well." "It did not go well.">><<goodsex 12 "Joy Smith" "She is happy." "She is upset.">>',
+    '<<headline "A strange man was seen downtown.">><<headline "Police are baffled by the case.">>',
+    '<<happen "Cinema caught">><<happen "Park visited">><<happen "Bar fight">>',
+    '<<girlpic "Sherry Kuchen">><<girlpic "Joy Smith">>',
+    '<<mindread "Somehow, you hear a faint voice.">><<mindread "This is kinda fun, isn\'t it?">>',
+    '<<speech "Violet">>Hello!<</speech>><<speech "You" "Mark">>Hi.<</speech>><<speech "Violet">>Yes.<</speech>>',
+    '<<if $HAPPENED.includes("Cinema caught")>>Seen.<</if>> <<for _h range $headlines>>_h<</for>>',
+  ].join('\n');
+  const story = storyHtml(
+    [
+      { name: 'Start', text: uses },
+      { name: 'W', tags: 'widget', text: WIDGETS },
+    ],
+    SCRIPT,
+  );
+  const stats = analyzeTwineMacros([{ path: 'index.html', bytes: story }]);
+  const arg = (name: string, i: number) => stats.find((s) => s.name === name)!.args.find((a) => a.i === i)!;
+
+  it('参与比较或作为键的参数是逻辑值，不推荐翻译', () => {
+    expect(arg('unrelated', 0)).toMatchObject({ verdict: 'logic', recommend: false });
+    expect(arg('unrelated', 0).evidence.map((e) => e.kind)).toEqual(expect.arrayContaining(['compare', 'key']));
+    expect(stats.find((s) => s.name === 'unrelated')!.suggested).toBeNull();
+    // 存入变量、变量在别处按字符串查找
+    expect(arg('happen', 0)).toMatchObject({ verdict: 'logic', recommend: false });
+    expect(arg('happen', 0).evidence[0].kind).toBe('storedKey');
+    // 拼接成图片路径
+    expect(arg('girlpic', 0).verdict).toBe('logic');
+    expect(arg('girlpic', 0).evidence[0].kind).toBe('path');
+  });
+
+  it('经由别名与其他宏传递：链接文字为显示，链接目标为逻辑值', () => {
+    expect(arg('preylink', 0)).toMatchObject({ verdict: 'display', recommend: true });
+    expect(arg('preylink', 0).evidence).toContainEqual(expect.objectContaining({ kind: 'call', via: 'linker' }));
+    const s = stats.find((x) => x.name === 'preylink')!;
+    expect(s).toMatchObject({ source: 'widget', confidence: 'high', suggested: { name: 'preylink', args: [0] } });
+  });
+
+  it('按 split() 识别分隔符；输出的参数是显示，与键混用时只推荐显示的', () => {
+    expect(arg('convo', 0)).toMatchObject({ verdict: 'display', split: ['///', '|'] });
+    expect(stats.find((x) => x.name === 'convo')!.suggested).toEqual({ name: 'convo', args: [0], split: ['///', '|'] });
+    // 存入变量、别处没有输出：多半是键，不推荐
+    expect(arg('goodsex', 1)).toMatchObject({ verdict: 'stored', recommend: false });
+    expect(stats.find((x) => x.name === 'goodsex')!.suggested).toEqual({ name: 'goodsex', args: [2, 3] });
+    // 存入变量、变量在别处被输出
+    expect(arg('headline', 0)).toMatchObject({ verdict: 'display', recommend: true });
+    // typeof … !== "undefined" 是存在检查，不算比较
+    expect(arg('mindread', 0)).toMatchObject({ verdict: 'display', recommend: true });
+  });
+
+  it('Macro.add 定义的宏：拼进 class 为逻辑值，拼进输出为显示', () => {
+    expect(arg('speech', 0).verdict).toBe('logic');
+    expect(arg('speech', 0).evidence[0]).toMatchObject({ kind: 'markup' });
+    expect(arg('speech', 1).verdict).toBe('display');
+    expect(stats.find((x) => x.name === 'speech')!.source).toBe('script');
+  });
+
+  it('按分隔符拆成多条词条，写回时用原分隔符拼接', () => {
+    const config = { twine: { macros: [{ name: 'convo', args: [0], split: ['///', '|'] }] } };
+    const { entries } = extractEntries('index.html', story, 'TWINE', config);
+    const convo = entries.filter((e) => (e.context[1]?.p as { macro?: string } | undefined)?.macro === 'convo');
+    expect(convo.map((e) => e.original)).toEqual(['Hello there.', 'She smiles.', 'How are you today?', 'Goodnight daddy.', 'Sleep well, sweetie.']);
+    const tr = new Map([
+      [convo[0].key, '你好。'],
+      [convo[2].key, '今天"好吗"？'],
+    ]);
+    const html = dec.decode(applyTranslations('index.html', story, 'TWINE', tr, config).data);
+    expect(html).toContain(esc('<<convo "你好。///She smiles.|今天\\"好吗\\"？">>'));
   });
 });

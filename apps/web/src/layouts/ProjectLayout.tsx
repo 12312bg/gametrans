@@ -9,6 +9,7 @@ import { makeOutlet, useProjectQuery } from '../api/project';
 import { RealtimeProvider } from '../api/realtime';
 import { OnlineMembers } from '../components/OnlineMembers';
 import { EngineTag, LangPair, RoleTag, VisibilityTag } from '../components/Tags';
+import { TwinePendingBanner } from '../pages/project/twine/TwinePendingBanner';
 import { useT } from '../i18n';
 import { useAuth } from '../providers/AuthProvider';
 import { errorMessage } from '../utils';
@@ -131,6 +132,7 @@ export function ProjectLayout() {
         </div>
       </div>
       <div className={isEditor ? 'editor-container' : 'page-container'}>
+        {p.engine === 'TWINE' && !isEditor && section !== 'settings' && outlet.has(PERMISSIONS.MANAGE_PROJECT) && <TwinePendingBanner pid={p.id} />}
         <Outlet context={outlet} />
       </div>
       <Modal

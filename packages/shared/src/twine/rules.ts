@@ -15,11 +15,76 @@ export interface TwineMacroRule {
   speaker?: number;
   /** 词条分类，默认 dialogue */
   category?: TwineRuleCategory;
+  /**
+   * 文字参数中的分隔符（如 "|"、"///"）：宏定义会按它拆成多句，
+   * 提取时拆成多条词条，写回时用原分隔符拼接
+   */
+  split?: string[];
 }
 
 export interface TwineConfig {
   /** 项目自定义规则；与内置规则同名时覆盖内置规则 */
   macros: TwineMacroRule[];
+  /** 确认过不需要翻译的自定义宏：分析时不再提示 */
+  ignored?: string[];
+}
+
+/** 分析结果中参数的用途：显示文字、逻辑值（比较 / 键 / 目标 / 标签名 / 路径）、存入变量、无法判断 */
+export const TWINE_ARG_VERDICTS = ['display', 'logic', 'stored', 'unknown'] as const;
+export type TwineArgVerdict = (typeof TWINE_ARG_VERDICTS)[number];
+
+/** 判断依据的类型 */
+export type TwineEvidenceKind =
+  | 'print' // <<print>> / <<=>> 输出
+  | 'text' // 直接写在宏定义的正文中
+  | 'link' // 作为链接 / 按钮文字
+  | 'call' // 传给另一个宏的文字参数
+  | 'shown' // 存入变量，变量在别处输出
+  | 'compare' // 参与比较
+  | 'key' // 作为键：includes()、数组下标等
+  | 'target' // 段落名：<<goto>>、链接目标
+  | 'markup' // HTML 标签名、属性、CSS 类
+  | 'path' // 拼接成文件路径或 ID
+  | 'storedKey' // 存入变量，变量在别处按字符串查找
+  | 'store' // 存入变量
+  | 'script'; // 只在 JavaScript 中使用（Macro.add 等），无法判断
+
+export interface TwineEvidence {
+  kind: TwineEvidenceKind;
+  /** 宏定义中的代码片段 */
+  code: string;
+  /** 经由哪个宏（传参时） */
+  via?: string;
+}
+
+/** 自定义宏每个参数位置的统计与用途判断 */
+export interface TwineArgStat {
+  i: number;
+  /** 该位置是字符串的次数 */
+  strings: number;
+  /** 像是句子的次数 */
+  prose: number;
+  /** 不同取值数（非字符串，判断是否为说话人代号） */
+  distinct: number;
+  samples: string[];
+  verdict: TwineArgVerdict;
+  evidence: TwineEvidence[];
+  /** 宏定义按这些分隔符拆分该参数 */
+  split?: string[];
+  /** 是否推荐翻译 */
+  recommend: boolean;
+}
+
+export interface TwineMacroStat {
+  name: string;
+  uses: number;
+  /** widget：在故事中用 <<widget>> 定义（可分析用法）；script：在 JavaScript 中用 Macro.add 定义；none：找不到定义 */
+  source: 'widget' | 'script' | 'none';
+  args: TwineArgStat[];
+  /** 推荐的规则；没有像显示文字的参数时为 null */
+  suggested: TwineMacroRule | null;
+  /** high：按宏定义判断；low：只按字符串内容猜测，需要确认 */
+  confidence: 'high' | 'low';
 }
 
 /** 项目的解析配置（Project.parserConfig） */
@@ -87,12 +152,28 @@ export function normalizeTwineConfig(input: unknown): { ok: true; value: TwineCo
     else return { ok: false, error: 'validation.twineRules' };
     if (r!.speaker !== undefined && r!.speaker !== null && !isIndex(r!.speaker)) return { ok: false, error: 'validation.twineRules' };
     if (r!.category !== undefined && !TWINE_RULE_CATEGORIES.includes(r!.category)) return { ok: false, error: 'validation.twineRules' };
+    let split: string[] | undefined;
+    if (r!.split !== undefined && r!.split !== null) {
+      if (!Array.isArray(r!.split) || r!.split.length > 8 || !r!.split.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 8)) {
+        return { ok: false, error: 'validation.twineRules' };
+      }
+      split = [...new Set(r!.split as string[])];
+    }
     out.push({
       name,
       args,
       ...(isIndex(r!.speaker) ? { speaker: r!.speaker as number } : {}),
       ...(r!.category && r!.category !== 'dialogue' ? { category: r!.category } : {}),
+      ...(split?.length ? { split } : {}),
     });
   }
-  return { ok: true, value: { macros: out } };
+  const rawIgnored = (input as { ignored?: unknown }).ignored;
+  let ignored: string[] = [];
+  if (rawIgnored !== undefined && rawIgnored !== null) {
+    if (!Array.isArray(rawIgnored) || rawIgnored.length > 500) return { ok: false, error: 'validation.twineRules' };
+    if (!rawIgnored.every((x) => typeof x === 'string' && /^(?:[A-Za-z][\w-]*|[=-])$/.test(x) && x.length <= 64)) return { ok: false, error: 'validation.twineRules' };
+    // 已有规则的宏不算「不翻译」
+    ignored = [...new Set(rawIgnored as string[])].filter((x) => !seen.has(x)).sort();
+  }
+  return { ok: true, value: { macros: out, ...(ignored.length ? { ignored } : {}) } };
 }

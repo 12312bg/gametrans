@@ -1,5 +1,5 @@
 import { unzipSync, zipSync } from 'fflate';
-import { TestUser, btn, confirmDialog, createUser, expect, openEditor, parseJobsDrawer, test, toast, useAs } from './helpers';
+import { TestUser, btn, createUser, expect, openEditor, parseJobsDrawer, test, toast, useAs } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -20,10 +20,23 @@ function storyHtml() {
         '<<but "Look around first" Yard>>',
         '<<but "Wait at the gate" Start>>',
         '[[Read the notice|Notice]]',
+        '<<met "Abbot Joseph">><<met "Sister Agnes">>',
+        '<<if $metList.includes("Abbot Joseph")>>You know him.<</if>>',
+        '<<chat "Hello.///He nods.|Come in, quickly.">>',
+        '<<chat "Is it late?///She yawns.|It is.">>',
       ].join('\n'),
     },
     { name: 'Hall', text: 'A long, quiet hall.' },
-    { name: 'Widgets', tags: 'widget', text: '<<widget say>><<print _args[1]>><</widget>>\n<<widget but>><<link _args[0] _args[1]>><</link>><</widget>>' },
+    {
+      name: 'Widgets',
+      tags: 'widget',
+      text: [
+        '<<widget say>><<print _args[1]>><</widget>>',
+        '<<widget but>><<link _args[0] _args[1]>><</link>><</widget>>',
+        '<<widget "met">><<set $metList.pushUnique(_args[0])>><</widget>>',
+        '<<widget "chat">><<for _l range _args[0].split("|")>><<print _l.split("///")[0]>><</for>><</widget>>',
+      ].join('\n'),
+    },
   ];
   return Buffer.from(
     `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gate</title></head><body>` +
@@ -61,35 +74,57 @@ test('上传 zip：只解析故事 HTML，其他 HTML 记为跳过', async () =>
   expect(r.data.items).toHaveLength(0);
 });
 
-test('设置页分析自定义宏、采用推荐并重新提取', async ({ page }) => {
+test('上传后提示待确认的自定义宏；按定义判断用途，确认后保存并重新提取', async ({ page }) => {
   await useAs(page, owner);
-  await page.goto(`/projects/${pid}/settings`);
-  const card = page.locator('.ant-card').filter({ hasText: 'Twine 宏规则' });
-  await expect(card).toContainText('还没有自定义规则');
-  await expect(card).toContainText('<<link>>');
-  await btn(card, '分析故事').click();
-  await expect(card).toContainText('分析了 1 个文件中的 2 个自定义宏，其中 2 个像是带显示文字');
-  const sayRow = card.locator('.twine-analysis .ant-table-row').filter({ hasText: '<<say>>' });
-  await expect(sayRow).toContainText('已定义');
-  await expect(sayRow).toContainText('文字参数 1 · 说话人 0');
-  await btn(card, '采用全部推荐').click();
-  await expect(card.getByLabel('宏', { exact: true })).toHaveCount(2);
-  await btn(card, '保存').click();
-  const dlg = confirmDialog(page);
-  await expect(dlg).toContainText('宏规则已保存');
-  await btn(dlg, '重新提取').click();
-  await expect(toast(page, '已开始重新提取')).toBeVisible();
+  await page.goto(`/projects/${pid}/files`);
+  const banner = page.locator('.twine-pending');
+  await expect(banner).toContainText('发现 3 个自定义宏可能含有要翻译的文字');
+  await btn(banner, '去确认').click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${pid}/settings#twine-rules`));
+
+  const card = page.locator('#twine-rules');
+  const item = (name: string) => card.locator(`.twine-macro[data-macro="${name}"]`);
+  await expect(card.getByText('待确认 3')).toBeVisible();
+  // <<say>>：参数 1 被输出（显示文字），参数 0 是说话人代号
+  await expect(item('say')).toContainText('按定义判断');
+  await expect(item('say').locator('.twine-arg').nth(1)).toContainText('显示文字');
+  await expect(item('say').locator('.twine-arg').nth(1)).toContainText('输出：');
+  await expect(item('say').getByLabel('say #0').getByText('说话人')).toBeVisible();
+  // <<but>>：参数 1 是段落名
+  await expect(item('but').locator('.twine-arg').nth(1)).toContainText('逻辑值');
+  await expect(item('but').locator('.twine-arg').nth(1)).toContainText('作为段落名');
+  // <<chat>>：按 split() 拆分
+  await expect(item('chat')).toContainText('按 “///” “|” 拆成多条词条');
+  await expect(item('chat')).toContainText('将提取 6 条');
+  // <<met>>：存入的变量在别处按字符串查找，是逻辑值，不推荐
+  await card.getByText(/^全部 \d+$/).click();
+  await expect(item('met')).toContainText('逻辑值');
+  await expect(item('met')).toContainText('存入变量，变量在别处按字符串查找');
+  await expect(card).toContainText(/保存后共 \d+ 条词条（新增 12 条，移除 0 条）/);
+
+  await btn(card, '保存并重新提取').click();
+  await expect(toast(page, '宏规则已保存，已开始重新提取')).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/projects/${pid}/files`));
   const drawer = await parseJobsDrawer(page);
   await expect(drawer.locator('.job-result').first()).toContainText(/新增|更新/, { timeout: 30_000 });
+  await expect(page.locator('.twine-pending')).toHaveCount(0);
 
   const rules = await owner.api.ok('GET', `/projects/${pid}/twine/rules`);
-  expect(rules.macros).toEqual([
-    { name: 'but', args: [0] },
-    { name: 'say', args: [1], speaker: 0 },
-  ]);
+  expect(rules.macros).toEqual(
+    expect.arrayContaining([
+      { name: 'but', args: [0] },
+      { name: 'say', args: [1], speaker: 0 },
+      { name: 'chat', args: [0], split: ['///', '|'] },
+    ]),
+  );
+  // 没有选择翻译的宏记为「不翻译」，以后不再提示
+  expect(rules.ignored).toEqual(['met']);
   await owner.api.findEntry(pid, 'Brother, you came at last.');
   await owner.api.findEntry(pid, 'Enter the hall');
+  await owner.api.findEntry(pid, 'He nods.');
+  await owner.api.findEntry(pid, 'Come in, quickly.');
+  const met = await owner.api.call('GET', `/projects/${pid}/entries?q=${encodeURIComponent('Abbot Joseph')}&field=original`);
+  expect(met.data.items).toHaveLength(0);
 });
 
 test('编辑器高亮宏、显示说话人，漏掉宏时提示', async ({ page }) => {

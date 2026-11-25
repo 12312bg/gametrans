@@ -1,25 +1,14 @@
-import { BulbOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Card, Empty, Input, InputNumber, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { App, Button, Card, Empty, Input, InputNumber, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { TWINE_RULE_CATEGORIES, TwineMacroRule, TwineRuleCategory } from '@gametrans/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useT } from '../../i18n';
 import { errorMessage } from '../../utils';
-
-interface RulesResponse {
-  builtin: TwineMacroRule[];
-  macros: TwineMacroRule[];
-}
-
-interface MacroStat {
-  name: string;
-  uses: number;
-  defined: boolean;
-  args: { i: number; strings: number; prose: number; distinct: number; samples: string[] }[];
-  suggested: TwineMacroRule | null;
-}
+import { RulesResponse, useTwineRules } from './twine/api';
+import { TwineMacroReview } from './twine/TwineMacroReview';
 
 /** 编辑中的规则：参数写成文本（"1, 2" 或 "all"），保存时再转换 */
 interface Row {
@@ -28,6 +17,8 @@ interface Row {
   args: string;
   speaker: number | null;
   category: TwineRuleCategory;
+  /** 分隔符：手动编辑中不显示，原样保留 */
+  split?: string[];
 }
 
 let seq = 0;
@@ -37,6 +28,7 @@ const toRow = (r: TwineMacroRule): Row => ({
   args: r.args === 'all' ? 'all' : r.args.join(', '),
   speaker: r.speaker ?? null,
   category: r.category ?? 'dialogue',
+  ...(r.split?.length ? { split: r.split } : {}),
 });
 
 /** "1, 2" → [1, 2]；"all" → 'all'；格式不对返回 null */
@@ -52,7 +44,13 @@ export function parseArgs(text: string): number[] | 'all' | null {
 const toRule = (r: Row): TwineMacroRule | null => {
   const args = parseArgs(r.args);
   if (args === null || !r.name.trim()) return null;
-  return { name: r.name.trim(), args, ...(r.speaker !== null ? { speaker: r.speaker } : {}), ...(r.category !== 'dialogue' ? { category: r.category } : {}) };
+  return {
+    name: r.name.trim(),
+    args,
+    ...(r.speaker !== null ? { speaker: r.speaker } : {}),
+    ...(r.category !== 'dialogue' ? { category: r.category } : {}),
+    ...(r.split?.length ? { split: r.split } : {}),
+  };
 };
 
 const ruleText = (r: TwineMacroRule) => (r.args === 'all' ? 'all' : r.args.join(', ') || '—');
@@ -66,15 +64,14 @@ export function TwineRulesCard({ pid }: { pid: string }) {
   const qc = useQueryClient();
   const nav = useNavigate();
   const { message, modal } = App.useApp();
-  const rules = useQuery({ queryKey: ['twineRules', pid], queryFn: () => api<RulesResponse>(`/projects/${pid}/twine/rules`) });
+  const rules = useTwineRules(pid);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const [analysis, setAnalysis] = useState<{ files: number; macros: MacroStat[] } | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
 
+  // 规则在「确认自定义宏」中保存后同步过来
   useEffect(() => {
-    if (rules.data && rows === null) setRows(rules.data.macros.map(toRow));
-  }, [rules.data, rows]);
+    if (rules.data) setRows(rules.data.macros.map(toRow));
+  }, [rules.data]);
 
   const current = rows ?? [];
   const invalid = current.filter((r) => toRule(r) === null).map((r) => r.id);
@@ -86,25 +83,13 @@ export function TwineRulesCard({ pid }: { pid: string }) {
   }, [rows, rules.data]);
 
   const update = (id: number, patch: Partial<Row>) => setRows((rs) => (rs ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const adopt = (list: TwineMacroRule[]) =>
-    setRows((rs) => {
-      const out = [...(rs ?? [])];
-      for (const r of list) {
-        const at = out.findIndex((x) => x.name.trim() === r.name);
-        if (at >= 0) out[at] = { ...toRow(r), id: out[at].id };
-        else out.push(toRow(r));
-      }
-      return out;
-    });
-
-  const analyze = async () => {
-    setAnalyzing(true);
+  const unignore = async (name: string) => {
     try {
-      setAnalysis(await api<{ files: number; macros: MacroStat[] }>(`/projects/${pid}/twine/macros`));
+      const r = await api<RulesResponse>(`/projects/${pid}/twine/rules`, { method: 'PUT', body: { macros: rules.data!.macros, ignored: rules.data!.ignored.filter((n) => n !== name) } });
+      qc.setQueryData(['twineRules', pid], r);
+      qc.invalidateQueries({ queryKey: ['twineMacros', pid] });
     } catch (e) {
       message.error(errorMessage(e));
-    } finally {
-      setAnalyzing(false);
     }
   };
 
@@ -115,6 +100,7 @@ export function TwineRulesCard({ pid }: { pid: string }) {
     try {
       const r = await api<RulesResponse>(`/projects/${pid}/twine/rules`, { method: 'PUT', body: { macros: list } });
       qc.setQueryData(['twineRules', pid], r);
+      qc.invalidateQueries({ queryKey: ['twineMacros', pid] });
       setRows(r.macros.map(toRow));
       modal.confirm({
         title: t('twine.saved'),
@@ -139,101 +125,17 @@ export function TwineRulesCard({ pid }: { pid: string }) {
   };
 
   const categoryOptions = TWINE_RULE_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }));
-  const suggestions = analysis?.macros.filter((m) => m.suggested) ?? [];
 
-  return (
-    <Card
-      variant="borderless"
-      title={t('twine.title')}
-      extra={
-        <Space>
-          <Button icon={<SearchOutlined />} loading={analyzing} onClick={analyze}>
-            {t('twine.analyze')}
-          </Button>
-          <Button type="primary" onClick={save} loading={saving} disabled={!dirty}>
-            {t('common.save')}
-          </Button>
-        </Space>
-      }
-    >
-      <Typography.Paragraph type="secondary" className="small">
-        {t('twine.desc')}
-      </Typography.Paragraph>
-
-      {analysis && (
-        <div className="twine-analysis" style={{ marginBottom: 16 }}>
-          <Space style={{ marginBottom: 8 }} wrap>
-            <BulbOutlined />
-            <span>{t('twine.analyzed', { files: analysis.files, macros: analysis.macros.length, suggested: suggestions.length })}</span>
-            {suggestions.length > 0 && (
-              <Button size="small" onClick={() => adopt(suggestions.map((m) => m.suggested!))}>
-                {t('twine.adoptAll')}
-              </Button>
-            )}
-          </Space>
-          <Table<MacroStat>
-            size="small"
-            rowKey="name"
-            dataSource={analysis.macros}
-            pagination={analysis.macros.length > 10 ? { pageSize: 10, size: 'small' } : false}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('twine.noMacros')} /> }}
-            columns={[
-              {
-                title: t('twine.macro'),
-                dataIndex: 'name',
-                width: 160,
-                render: (n: string, m) => (
-                  <Space size={4} wrap>
-                    <code>{`<<${n}>>`}</code>
-                    {m.defined && (
-                      <Tooltip title={t('twine.definedTip')}>
-                        <Tag bordered={false}>{t('twine.defined')}</Tag>
-                      </Tooltip>
-                    )}
-                  </Space>
-                ),
-              },
-              { title: t('twine.uses'), dataIndex: 'uses', width: 70 },
-              {
-                title: t('twine.samples'),
-                render: (_, m) => (
-                  <div className="small">
-                    {m.args
-                      .filter((a) => a.samples.length)
-                      .slice(0, 3)
-                      .map((a) => (
-                        <div key={a.i} className="ellipsis">
-                          <Tag bordered={false}>#{a.i}</Tag>
-                          <span className="muted">{a.samples[0]}</span>
-                        </div>
-                      ))}
-                  </div>
-                ),
-              },
-              {
-                title: t('twine.suggested'),
-                width: 220,
-                render: (_, m) =>
-                  m.suggested ? (
-                    <Space size={4} wrap>
-                      <span className="small">
-                        {t('twine.argsShort', { args: ruleText(m.suggested) })}
-                        {m.suggested.speaker !== undefined ? ` · ${t('twine.speakerShort', { i: m.suggested.speaker })}` : ''}
-                      </span>
-                      <Button size="small" type="link" onClick={() => adopt([m.suggested!])}>
-                        {t('twine.adopt')}
-                      </Button>
-                    </Space>
-                  ) : (
-                    <Button size="small" type="link" onClick={() => adopt([{ name: m.name, args: [m.args.find((a) => a.strings)?.i ?? 0] }])}>
-                      {t('twine.addManually')}
-                    </Button>
-                  ),
-              },
-            ]}
-          />
-        </div>
-      )}
+  const manual = (
+    <div>
+      <Space style={{ marginBottom: 8, width: '100%', justifyContent: 'space-between' }}>
+        <Typography.Text type="secondary" className="small">
+          {t('twine.manualDesc')}
+        </Typography.Text>
+        <Button type="primary" size="small" onClick={save} loading={saving} disabled={!dirty}>
+          {t('common.save')}
+        </Button>
+      </Space>
 
       <Table<Row>
         size="small"
@@ -318,6 +220,35 @@ export function TwineRulesCard({ pid }: { pid: string }) {
           </Space>
         </div>
       )}
+      {(rules.data?.ignored.length ?? 0) > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div className="muted small" style={{ marginBottom: 4 }}>
+            {t('twine.ignoredList')}
+          </div>
+          <Space size={[4, 4]} wrap>
+            {rules.data!.ignored.map((n) => (
+              <Tag key={n} bordered={false} closable onClose={(e) => (e.preventDefault(), unignore(n))}>
+                <code>{`<<${n}>>`}</code>
+              </Tag>
+            ))}
+          </Space>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Card variant="borderless" title={t('twine.title')} id="twine-rules">
+      <Typography.Paragraph type="secondary" className="small">
+        {t('twine.desc')}
+      </Typography.Paragraph>
+      <Tabs
+        size="small"
+        items={[
+          { key: 'review', label: t('twine.tab.review'), children: <TwineMacroReview pid={pid} /> },
+          { key: 'manual', label: t('twine.tab.manual'), children: manual },
+        ]}
+      />
     </Card>
   );
 }

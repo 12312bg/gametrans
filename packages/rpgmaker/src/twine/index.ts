@@ -72,6 +72,11 @@ export function parseTwine(bytes: Uint8Array, opts: ParseOptions): ParsedDocumen
         for (const e of g.edits) all.push({ start: g.source.toRaw(e.start), end: g.source.toRaw(e.end), value: g.source.escape(e.value) });
       }
       if (!all.length) return bytes;
+      // 拆分的宏参数会对同一位置多次写入，以最后一次为准（包含所有片段的译文）
+      const last = new Map<string, (typeof all)[number]>();
+      for (const e of all) last.set(`${e.start}:${e.end}`, e);
+      all.length = 0;
+      all.push(...last.values());
       all.sort((a, b) => a.start - b.start);
       const parts: string[] = [];
       let pos = 0;

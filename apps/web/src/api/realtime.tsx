@@ -105,7 +105,7 @@ export function RealtimeProvider({ pid, children }: { pid: string; children: Rea
           break;
         case 'entries':
         case 'files':
-          invalidate('entries', 'entry', 'project', 'files', 'stats', 'history', 'scene', 'project-history', 'activity');
+          invalidate('entries', 'entry', 'project', 'files', 'stats', 'history', 'scene', 'project-history', 'activity', 'twineMacros');
           break;
         case 'terms':
           invalidate('terms', 'project-history', 'activity');

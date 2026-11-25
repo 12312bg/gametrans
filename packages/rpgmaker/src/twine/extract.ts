@@ -222,7 +222,22 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
         const value = unescapeMacroString(text.slice(arg.contentStart, arg.contentEnd));
         if (!HAS_WORD.test(stripMarkup(value))) continue;
         const quote = arg.quote;
-        emit(arg.contentStart, arg.contentEnd, value, detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker), cat, false, (v) => escapeMacroString(v, quote));
+        const detail = detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker);
+        const parts = rule.split?.length && i !== rule.speaker ? splitParts(value, rule.split) : null;
+        if (!parts || parts.length === 1) {
+          emit(arg.contentStart, arg.contentEnd, value, detail, cat, false, (v) => escapeMacroString(v, quote));
+          continue;
+        }
+        // 按分隔符拆成多条词条：每条写回时更新对应片段，整个字符串用原分隔符拼接（同一位置以最后一次写入为准）
+        parts.forEach((part, k) => {
+          if (part.sep || !HAS_WORD.test(stripMarkup(part.text))) return;
+          const lead = /^\s*/.exec(part.text)![0];
+          const trail = /\s*$/.exec(part.text.slice(lead.length))![0];
+          emit(arg.contentStart, arg.contentEnd, part.text.trim(), detail, cat, false, (v) => {
+            parts[k] = { text: lead + v + trail };
+            return escapeMacroString(parts.map((x) => x.text).join(''), quote);
+          });
+        });
       }
     }
   };
@@ -283,6 +298,12 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
     }
   }
   flush();
+}
+
+/** 按分隔符拆分（长的优先），分隔符本身也作为片段保留 */
+function splitParts(value: string, seps: string[]): { text: string; sep?: boolean }[] {
+  const re = new RegExp(`(${[...seps].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
+  return value.split(re).map((text, k) => (k % 2 ? { text, sep: true } : { text }));
 }
 
 /** 去掉标记后的文字（判断是否有需要翻译的内容） */

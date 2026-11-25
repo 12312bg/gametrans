@@ -21,6 +21,11 @@ export interface TwineMacroRule {
    * 提取时拆成多条词条，写回时用原分隔符拼接
    */
   split?: string[];
+  /**
+   * 带前缀的文字参数（如 "response:台词|台词"、"set:REPLY:台词"）：任意位置的字符串参数以这些前缀开头时（不区分大小写），
+   * 提取前缀之后的文字（按 split 拆分），写回时保留前缀
+   */
+  prefixes?: string[];
 }
 
 export interface TwineConfig {
@@ -76,12 +81,26 @@ export interface TwineArgStat {
   recommend: boolean;
 }
 
+/** 参数中带前缀的文字（如 response:…），按前缀统计 */
+export interface TwinePrefixStat {
+  prefix: string;
+  /** 出现次数 */
+  count: number;
+  /** 前缀后像是句子的次数 */
+  prose: number;
+  samples: string[];
+  /** 是否推荐提取 */
+  recommend: boolean;
+}
+
 export interface TwineMacroStat {
   name: string;
   uses: number;
   /** widget：在故事中用 <<widget>> 定义（可分析用法）；script：在 JavaScript 中用 Macro.add 定义；none：找不到定义 */
   source: 'widget' | 'script' | 'none';
   args: TwineArgStat[];
+  /** 选项参数中带前缀的文字 */
+  prefixes: TwinePrefixStat[];
   /** 推荐的规则；没有像显示文字的参数时为 null */
   suggested: TwineMacroRule | null;
   /** high：按宏定义判断；low：只按字符串内容猜测，需要确认 */
@@ -163,12 +182,20 @@ export function normalizeTwineConfig(input: unknown): { ok: true; value: TwineCo
       }
       split = [...new Set(r!.split as string[])];
     }
+    let prefixes: string[] | undefined;
+    if (r!.prefixes !== undefined && r!.prefixes !== null) {
+      if (!Array.isArray(r!.prefixes) || r!.prefixes.length > 20 || !r!.prefixes.every((x) => typeof x === 'string' && x.trim().length > 0 && x.length <= 32)) {
+        return { ok: false, error: 'validation.twineRules' };
+      }
+      prefixes = [...new Set(r!.prefixes as string[])];
+    }
     out.push({
       name,
       args,
       ...(isIndex(r!.speaker) ? { speaker: r!.speaker as number } : {}),
       ...(category ? { category } : {}),
       ...(split?.length ? { split } : {}),
+      ...(prefixes?.length ? { prefixes } : {}),
     });
   }
   const rawIgnored = (input as { ignored?: unknown }).ignored;

@@ -17,6 +17,8 @@ export interface Decision {
   split: boolean;
   /** auto：有说话人时为对话，否则为正文 */
   category: TwineRuleCategory | 'auto';
+  /** 要提取的带前缀文字（如 response:） */
+  prefixes: string[];
 }
 
 const VERDICT_COLOR: Record<TwineArgVerdict, string> = { display: 'green', logic: 'red', stored: 'orange', unknown: 'default' };
@@ -29,7 +31,7 @@ export function initialDecision(m: AnalyzedMacro, saved: TwineMacroRule | undefi
     const on = rule && (rule.args === 'all' ? a.strings > 0 : rule.args.includes(a.i));
     choices[a.i] = rule?.speaker === a.i ? 'speaker' : on ? 'translate' : 'skip';
   }
-  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: rule?.category ?? 'auto' };
+  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: rule?.category ?? 'auto', prefixes: rule?.prefixes ?? [] };
 }
 
 /** 选择 → 规则；没有要翻译的参数时返回 null（记为「不翻译」） */
@@ -38,15 +40,19 @@ export function ruleOf(m: AnalyzedMacro, d: Decision): TwineMacroRule | null {
     .filter(([, c]) => c === 'translate')
     .map(([i]) => Number(i))
     .sort((a, b) => a - b);
-  if (!args.length) return null;
+  const prefixes = d.prefixes.filter(Boolean);
+  if (!args.length && !prefixes.length) return null;
   const sp = Object.entries(d.choices).find(([, c]) => c === 'speaker');
-  const split = d.split ? [...new Set(m.args.filter((a) => args.includes(a.i)).flatMap((a) => a.split ?? []))] : [];
+  // 分隔符取自要翻译的参数；只提取带前缀文字时取自所有参数
+  const from = args.length ? m.args.filter((a) => args.includes(a.i)) : m.args;
+  const split = d.split ? [...new Set(from.flatMap((a) => a.split ?? []))] : [];
   return {
     name: m.name,
     args,
     ...(sp ? { speaker: Number(sp[0]) } : {}),
     ...(d.category !== 'auto' ? { category: d.category } : {}),
     ...(split.length ? { split } : {}),
+    ...(prefixes.length ? { prefixes } : {}),
   };
 }
 
@@ -155,7 +161,7 @@ export function TwineMacroReview({ pid }: { pid: string }) {
     choices[i] = c;
     update(m.name, { choices });
   };
-  const translating = (m: AnalyzedMacro) => Object.values(decisions[m.name].choices).includes('translate');
+  const translating = (m: AnalyzedMacro) => Object.values(decisions[m.name].choices).includes('translate') || decisions[m.name].prefixes.length > 0;
 
   const shown = macros.filter((m) => {
     if (q && !m.name.toLowerCase().includes(q.toLowerCase())) return false;
@@ -237,7 +243,7 @@ export function TwineMacroReview({ pid }: { pid: string }) {
                     <Button
                       size="small"
                       icon={<StopOutlined />}
-                      onClick={() => update(m.name, { choices: Object.fromEntries(m.args.map((a) => [a.i, 'skip' as Choice])) })}
+                      onClick={() => update(m.name, { choices: Object.fromEntries(m.args.map((a) => [a.i, 'skip' as Choice])), prefixes: [] })}
                     >
                       {t('twine.skipAll')}
                     </Button>
@@ -281,6 +287,29 @@ export function TwineMacroReview({ pid }: { pid: string }) {
                     </div>
                   ))}
                 </div>
+                {m.prefixes.length > 0 && (
+                  <div className="twine-prefixes">
+                    <Tooltip title={t('twine.prefixTip')}>
+                      <div className="muted small">{t('twine.prefixTitle')}</div>
+                    </Tooltip>
+                    {m.prefixes.map((x) => (
+                      <div key={x.prefix} className="twine-prefix">
+                        <Checkbox
+                          checked={d.prefixes.includes(x.prefix)}
+                          onChange={(e) => update(m.name, { prefixes: e.target.checked ? [...d.prefixes, x.prefix] : d.prefixes.filter((p) => p !== x.prefix) })}
+                          aria-label={`${m.name} ${x.prefix}`}
+                        >
+                          <code>{x.prefix}</code> <span className="muted small">{t('twine.prefixCount', { count: x.count, prose: x.prose })}</span>
+                        </Checkbox>
+                        {x.samples[0] && (
+                          <span className="small ellipsis muted" title={x.samples[0]}>
+                            “{x.samples[0]}”
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {translating(m) && (
                   <Space size={12} wrap className="twine-macro-foot">
                     {splits.length > 0 && (

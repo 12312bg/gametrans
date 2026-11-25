@@ -222,26 +222,41 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
         emit(arg.link.labelStart, arg.link.labelEnd, label, detailOf(tok.name, i, line, speaker), cat, false, (v) => (simple ? `${v}|${target}` : v));
       } else if (arg.t === 'string') {
         const value = unescapeMacroString(text.slice(arg.contentStart, arg.contentEnd));
-        if (!HAS_WORD.test(stripMarkup(value))) continue;
-        const quote = arg.quote;
-        const detail = detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker);
-        const parts = rule.split?.length && i !== rule.speaker ? splitParts(value, rule.split) : null;
-        if (!parts || parts.length === 1) {
-          emit(arg.contentStart, arg.contentEnd, value, detail, cat, false, (v) => escapeMacroString(v, quote));
-          continue;
-        }
-        // 按分隔符拆成多条词条：每条写回时更新对应片段，整个字符串用原分隔符拼接（同一位置以最后一次写入为准）
-        parts.forEach((part, k) => {
-          if (part.sep || !HAS_WORD.test(stripMarkup(part.text))) return;
-          const lead = /^\s*/.exec(part.text)![0];
-          const trail = /\s*$/.exec(part.text.slice(lead.length))![0];
-          emit(arg.contentStart, arg.contentEnd, part.text.trim(), detail, cat, false, (v) => {
-            parts[k] = { text: lead + v + trail };
-            return escapeMacroString(parts.map((x) => x.text).join(''), quote);
-          });
-        });
+        emitString(arg, '', value, detailOf(tok.name, i, line, i === rule.speaker ? undefined : speaker), cat, i === rule.speaker ? undefined : rule.split);
       }
     }
+    // 其他位置带前缀的文字（如 "response:台词|台词"）：提取前缀之后的部分，写回时保留前缀
+    const prefixes = [...(rule.prefixes ?? [])].sort((x, y) => y.length - x.length);
+    if (!prefixes.length) return;
+    args.forEach((arg, i) => {
+      if (arg.t !== 'string' || indexes.includes(i) || i === rule.speaker) return;
+      const value = unescapeMacroString(text.slice(arg.contentStart, arg.contentEnd));
+      const prefix = prefixes.find((x) => value.toLowerCase().startsWith(x.toLowerCase()));
+      if (!prefix) return;
+      const head = value.slice(0, prefix.length);
+      emitString(arg, head, value.slice(prefix.length), { k: 'ctx.tw.prefixed', p: { macro: tok.name, i, prefix: head, n: line } }, ui ? 'ui' : 'dialogue', rule.split);
+    });
+  };
+
+  /** 宏参数中的字符串：head 为保留不译的前缀；有分隔符时拆成多条词条 */
+  const emitString = (arg: Extract<TwArg, { t: 'string' }>, head: string, value: string, detail: ContextPart, cat: EntryCategory, split: string[] | undefined) => {
+    if (!HAS_WORD.test(stripMarkup(value))) return;
+    const quote = arg.quote;
+    const parts = split?.length ? splitParts(value, split) : null;
+    if (!parts || parts.length === 1) {
+      emit(arg.contentStart, arg.contentEnd, value, detail, cat, false, (v) => escapeMacroString(head + v, quote));
+      return;
+    }
+    // 按分隔符拆成多条词条：每条写回时更新对应片段，整个字符串用原分隔符拼接（同一位置以最后一次写入为准）
+    parts.forEach((part, k) => {
+      if (part.sep || !HAS_WORD.test(stripMarkup(part.text))) return;
+      const lead = /^\s*/.exec(part.text)![0];
+      const trail = /\s*$/.exec(part.text.slice(lead.length))![0];
+      emit(arg.contentStart, arg.contentEnd, part.text.trim(), detail, cat, false, (v) => {
+        parts[k] = { text: lead + v + trail };
+        return escapeMacroString(head + parts.map((x) => x.text).join(''), quote);
+      });
+    });
   };
 
   const emitScript = (from: number, to: number) =>

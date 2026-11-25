@@ -15,6 +15,9 @@ export class TwineMacroRuleDto {
   /** 文字参数中的分隔符，如 ["///", "|"]：拆成多条词条，写回时用原分隔符拼接 */
   @ApiProperty({ type: [String], required: false })
   split?: string[];
+  /** 其他参数中带前缀的文字，如 ["response:", "set:REPLY:"]：提取前缀之后的部分（按 split 拆分），写回时保留前缀 */
+  @ApiProperty({ type: [String], required: false })
+  prefixes?: string[];
 }
 
 export class SaveTwineRulesDto {

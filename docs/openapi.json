@@ -4874,6 +4874,13 @@
               "type": "string"
             }
           },
+          "prefixes": {
+            "description": "其他参数中带前缀的文字，如 [\"response:\", \"set:REPLY:\"]：提取前缀之后的部分（按 split 拆分），写回时保留前缀",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "name": {
             "type": "string",
             "description": "宏名，如 say"

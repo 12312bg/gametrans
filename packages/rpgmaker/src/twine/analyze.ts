@@ -8,6 +8,7 @@ import {
   TwineEvidenceKind,
   TwineMacroRule,
   TwineMacroStat,
+  TwinePrefixStat,
   lexSugarCube,
   parseMacroArgs,
   unescapeMacroString,
@@ -49,6 +50,8 @@ export function isProse(raw: string): boolean {
   if (v.length < 2 || !/\p{L}/u.test(v)) return false;
   if (CJK.test(v)) return true;
   const words = v.split(' ');
+  // 单个全大写的词（MISC、OK）多半是常量
+  if (words.length === 1 && /^[A-Z0-9_]+$/.test(v.replace(/[.!?…]+$/, ''))) return false;
   // 句末标点之外的符号视为代码（选项、样式、条件表达式等）
   if (words.some((w) => CODEISH.test(w.replace(/^["'(“‘*]+|[.,!?…:;"')”’*]+$/g, '')))) return false;
   if (/^["'“‘(]?\p{Lu}/u.test(v) || /[.!?…]["'”’)]?$/.test(v)) return true;
@@ -544,6 +547,15 @@ function braceBody(js: string, open: number): string {
   return js.slice(open + 1, open + 2000);
 }
 
+interface PrefixAcc {
+  count: number;
+  prose: number;
+  samples: string[];
+}
+
+/** 选项参数的前缀：response:、set:REPLY:（可以连续多个），前缀由字母开头 */
+const PREFIX = /^((?:!?[A-Za-z][\w-]*:)+)([\s\S]*)$/;
+
 interface ArgAcc {
   strings: number;
   prose: number;
@@ -556,7 +568,7 @@ const MAX_SAMPLES = 5;
 
 /** 统计所有故事文件中的自定义宏，推荐「哪个参数是显示文字、哪个是说话人」 */
 export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[]): TwineMacroStat[] {
-  const acc = new Map<string, { uses: number; args: ArgAcc[] }>();
+  const acc = new Map<string, { uses: number; args: ArgAcc[]; prefixes: Map<string, Map<number, PrefixAcc>> }>();
   const widgets = new Map<string, WidgetDef>();
   const scriptMacros = new Map<string, string>();
   const splitMethods = new Map<string, string[]>();
@@ -612,13 +624,25 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
       if (!isCustom(tok.name) && (TWINE_BUILTIN_MACROS.has(tok.name) || /^end\w+$/.test(tok.name))) continue;
       const args = parseMacroArgs(p.text, tok.argsStart, tok.argsEnd);
       let a = acc.get(tok.name);
-      if (!a) acc.set(tok.name, (a = { uses: 0, args: [] }));
+      if (!a) acc.set(tok.name, (a = { uses: 0, args: [], prefixes: new Map() }));
       a.uses++;
       args.slice(0, 16).forEach((arg, i) => {
         const s = (a!.args[i] ??= { strings: 0, prose: 0, bare: 0, values: new Set(), samples: [] });
         if (arg.t === 'string') {
           const v = unescapeMacroString(p.text.slice(arg.contentStart, arg.contentEnd));
           s.strings++;
+          const pm = PREFIX.exec(v);
+          if (pm) {
+            const byIdx = a!.prefixes.get(pm[1]) ?? new Map<number, PrefixAcc>();
+            a!.prefixes.set(pm[1], byIdx);
+            const pa = byIdx.get(i) ?? { count: 0, prose: 0, samples: [] };
+            byIdx.set(i, pa);
+            pa.count++;
+            if (isProse(pm[2])) {
+              pa.prose++;
+              if (pa.samples.length < MAX_SAMPLES && !pa.samples.includes(pm[2])) pa.samples.push(pm[2].length > 160 ? `${pm[2].slice(0, 159)}…` : pm[2]);
+            }
+          }
           if (isProse(v)) {
             s.prose++;
             if (s.samples.length < MAX_SAMPLES && !s.samples.includes(v)) s.samples.push(v.length > 160 ? `${v.slice(0, 159)}…` : v);
@@ -633,8 +657,9 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
 
   // 故事变量在别处的用法：$list.includes("…") 为按字符串查找；<<print $x>>、range $x 为输出
   const all = texts.join('\n');
-  for (const m of all.matchAll(/\$([\w$]+)\.(?:includes|indexOf|includesAny|includesAll|delete|contains|count)\(\s*["'`]/g)) keyedVars.add(m[1]);
-  for (const m of all.matchAll(/\$([\w$]+)\s*(?:===?|!==?|\bis\b|\bisnot\b|\beq\b)\s*["'`]/g)) keyedVars.add(m[1]);
+  for (const m of all.matchAll(/\$([\w$]+)\.(?:includes|indexOf|includesAny|includesAll|delete|contains|count)\(\s*(["'`])(?!\2)/g)) keyedVars.add(m[1]);
+  // 与空字符串比较是判断是否为空，不算按字符串查找
+  for (const m of all.matchAll(/\$([\w$]+)\s*(?:===?|!==?|\bis\b|\bisnot\b|\beq\b)\s*(["'`])(?!\2)/g)) keyedVars.add(m[1]);
   for (const m of all.matchAll(/State\.variables\.([\w$]+)\.(?:includes|indexOf)\(\s*["'`]/g)) keyedVars.add(m[1]);
   for (const m of all.matchAll(/<<(?:print|=|-)\s+\$([\w$]+)|\brange\s+\$([\w$]+)|\$([\w$]+)\.(?:random|first|last|join|pluck|sayOne|sayIt)\(/g)) shownVars.add(m[1] ?? m[2] ?? m[3]);
 
@@ -663,7 +688,28 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
       }
     });
     const textArgs = args.filter((s) => s.recommend).map((s) => s.i);
+    // 带前缀的文字：只统计不是文字参数的位置；前缀后多数是句子才推荐
+    const prefixes: TwinePrefixStat[] = [];
+    for (const [prefix, byIdx] of a.prefixes) {
+      const st = { prefix, count: 0, prose: 0, samples: [] as string[], recommend: false };
+      for (const [i, pa] of byIdx) {
+        if (textArgs.includes(i)) continue;
+        st.count += pa.count;
+        st.prose += pa.prose;
+        for (const x of pa.samples) if (st.samples.length < MAX_SAMPLES && !st.samples.includes(x)) st.samples.push(x);
+      }
+      if (!st.prose) continue;
+      // set:变量:值 / push:数组:值：看该变量在别处是被按字符串查找（键）还是被输出
+      const target = /^!?[A-Za-z][\w-]*:([A-Za-z_$][\w$]*):$/.exec(prefix)?.[1];
+      if (target && keyedVars.has(target)) st.recommend = false;
+      else if (target && shownVars.has(target)) st.recommend = true;
+      else st.recommend = st.prose >= 2 && st.prose >= st.count * 0.8;
+      prefixes.push(st);
+    }
+    prefixes.sort((x, y) => y.prose - x.prose);
+    const prefixList = prefixes.filter((x) => x.recommend).map((x) => x.prefix);
     let suggested: TwineMacroRule | null = null;
+    if (!textArgs.length && prefixList.length) suggested = { name, args: [], prefixes: prefixList };
     if (textArgs.length) {
       // 说话人：文字之前、几乎每次都出现、取值种类少的非字符串参数（如 <<say ms "…">> 的 ms）
       // 取值须像代号（ms、mc），不是数字或变量；在宏定义中被直接显示的参数不是代号
@@ -681,14 +727,21 @@ export function analyzeTwineMacros(files: { path: string; bytes: Uint8Array }[])
       const split = [...new Set(textArgs.flatMap((i) => args.find((x) => x.i === i)!.split ?? []))];
       // 文字最终作为链接 / 按钮显示时推荐分类为「选项」
       const choice = textArgs.every((i) => linkArgs.has(i));
-      suggested = { name, args: textArgs, ...(sp >= 0 ? { speaker: sp } : {}), ...(choice && sp < 0 ? { category: 'choice' as const } : {}), ...(split.length ? { split } : {}) };
+      suggested = {
+        name,
+        args: textArgs,
+        ...(sp >= 0 ? { speaker: sp } : {}),
+        ...(choice && sp < 0 ? { category: 'choice' as const } : {}),
+        ...(split.length ? { split } : {}),
+        ...(prefixList.length ? { prefixes: prefixList } : {}),
+      };
     }
     // 推荐翻译的参数都由定义判断为显示文字时为高把握；其余无法判断的参数（如 goto:xxx 这类选项）不影响
     const recommended = args.filter((s) => s.recommend);
     const withText = args.filter((s) => s.strings > 0);
     const confident =
       source !== 'none' && (recommended.length ? recommended.every((s) => s.verdict === 'display') : withText.length > 0 && withText.every((s) => s.verdict === 'display' || s.verdict === 'logic'));
-    out.push({ name, uses: a.uses, source, args, suggested, confidence: confident ? 'high' : 'low' });
+    out.push({ name, uses: a.uses, source, args, prefixes, suggested, confidence: confident ? 'high' : 'low' });
   }
   // 推荐的排前面，其次按使用次数
   return out.sort((x, y) => Number(!!y.suggested) - Number(!!x.suggested) || y.uses - x.uses || x.name.localeCompare(y.name));

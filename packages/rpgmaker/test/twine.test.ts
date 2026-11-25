@@ -351,3 +351,58 @@ describe('按宏定义判断参数用途', () => {
     expect(html).toContain(esc('<<convo "你好。///She smiles.|今天\\"好吗\\"？">>'));
   });
 });
+
+describe('与内置宏同名的自定义宏、整体转发参数、共享临时变量', () => {
+  // 与真实游戏相同的结构：<<do "文字" 选项…>> → <<think $args "do">> → 按 _verb 调用 <<do_it>> / <<say_it>>，二者读取临时变量
+  const WIDGETS = [
+    '<<widget do>><<think $args "do">><</widget>>',
+    '<<widget say>><<think $args "say">><</widget>>',
+    '<<widget think>><<set _in = $args[0]>><<set _verb = $args[1]>><<set _txtPass = _in[0].sayOne()>>' +
+      '<<for _a = 1; _a < _in.length; _a++>><<set _statement = _in[_a].toString()>><<if _statement.includes(":")>><<set _target = _statement.split(":")[1]>><</if>><</for>>' +
+      '<<set _history = passage() + "__" + _txtPass>><<if $RECORDS.includes(_history)>><</if>>' +
+      '<<if _verb == "say">><<say_it>><<else>><<do_it>><</if>><</widget>>',
+    '<<widget do_it>><<set _txtFinal = _txtPass>><<if _txtFail != _txtPass>><</if>><<link _txtFinal>><<goto _target>><</link>><</widget>>',
+    '<<widget say_it>><<set _txtFinal = _txtPass>><span>_txtFinal</span><</widget>>',
+  ].join('\n');
+  const SCRIPT = 'String.prototype.sayOne = function () { var arr = this.split("|"); return arr[0]; };';
+  const uses = [
+    '<<do "Hello, I\'m $fakeName. I\'ll be your babysitter for this evening." goto:multiGirl2 isquote>>',
+    '<<do "Try talking to her." goto:talk>>',
+    '<<do "Wait until an opportune time.|Wait a little longer." goto:wait hypno>3>>',
+    '<<say "Nice to meet you.">><<say "Goodnight.">><<say "See you tomorrow.">>',
+  ].join('\n');
+  const story = storyHtml(
+    [
+      { name: 'Start', text: uses },
+      { name: 'W', tags: 'widget', text: WIDGETS },
+    ],
+    SCRIPT,
+  );
+  const stats = analyzeTwineMacros([{ path: 'index.html', bytes: story }]);
+  const macro = (name: string) => stats.find((s) => s.name === name)!;
+
+  it('<<do>> 与内置宏同名，但作者有定义，照样分析', () => {
+    expect(macro('do')).toMatchObject({ source: 'widget', confidence: 'high', suggested: { name: 'do', args: [0], category: 'choice', split: ['|'] } });
+    expect(macro('do').args[0]).toMatchObject({ verdict: 'display', recommend: true });
+    expect(macro('do').args[0].evidence[0]).toMatchObject({ kind: 'call', via: 'think' });
+    // goto:xxx 这类选项不推荐
+    expect(macro('do').args.find((a) => a.i === 1)?.recommend).toBe(false);
+  });
+
+  it('按调用方传入的常量只跟踪会执行的分支：<<say>> 走 <<say_it>>，不是链接', () => {
+    expect(macro('say').suggested).toEqual({ name: 'say', args: [0], split: ['|'] });
+  });
+
+  it('按规则提取并写回', () => {
+    const config: ParserConfig = { twine: { macros: [macro('do').suggested!] } };
+    const { entries } = extractEntries('index.html', story, 'TWINE', config);
+    const hello = byOriginal(entries, "Hello, I'm $fakeName. I'll be your babysitter for this evening.");
+    expect(hello).toMatchObject({ category: 'choice' });
+    expect(entries.filter((e) => e.category === 'choice').map((e) => e.original)).toEqual(
+      expect.arrayContaining(['Try talking to her.', 'Wait until an opportune time.', 'Wait a little longer.']),
+    );
+    const html = dec.decode(applyTranslations('index.html', story, 'TWINE', new Map([[hello!.key, '你好，我是 $fakeName，今晚由我来照看孩子。']]), config).data);
+    expect(html).toContain(esc('<<do "你好，我是 $fakeName，今晚由我来照看孩子。" goto:multiGirl2 isquote>>'));
+  });
+});
+

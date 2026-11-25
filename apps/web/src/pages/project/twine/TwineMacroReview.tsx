@@ -29,7 +29,7 @@ export function initialDecision(m: AnalyzedMacro, saved: TwineMacroRule | undefi
     const on = rule && (rule.args === 'all' ? a.strings > 0 : rule.args.includes(a.i));
     choices[a.i] = rule?.speaker === a.i ? 'speaker' : on ? 'translate' : 'skip';
   }
-  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: saved?.category ?? 'auto' };
+  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: rule?.category ?? 'auto' };
 }
 
 /** 选择 → 规则；没有要翻译的参数时返回 null（记为「不翻译」） */

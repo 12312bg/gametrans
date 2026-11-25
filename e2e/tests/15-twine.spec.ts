@@ -112,7 +112,7 @@ test('上传后提示待确认的自定义宏；按定义判断用途，确认�
   const rules = await owner.api.ok('GET', `/projects/${pid}/twine/rules`);
   expect(rules.macros).toEqual(
     expect.arrayContaining([
-      { name: 'but', args: [0] },
+      { name: 'but', args: [0], category: 'choice' },
       { name: 'say', args: [1], speaker: 0 },
       { name: 'chat', args: [0], split: ['///', '|'] },
     ]),

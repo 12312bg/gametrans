@@ -272,6 +272,7 @@ export const en: Record<keyof typeof zhCN, string> = {
   'ctx.tw.arg': '<<{macro}>> argument {i} · line {n}',
   'ctx.tw.prefixed': '<<{macro}>> argument {i} "{prefix}" · line {n}',
   'ctx.tw.say': '<<{macro}>> speaker {speaker} · line {n}',
+  'ctx.tw.print': 'Printed text · line {n}',
   'ctx.tw.script': 'Script string · line {n}',
   'ctx.tw.storyScript': 'Story JavaScript · line {n}',
 

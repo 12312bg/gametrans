@@ -264,6 +264,8 @@ class Analyzer {
       // 与字符串、故事变量、数值比较才算
       const other = CMP_AFTER.test(after) ? after.replace(CMP_AFTER, '').trimStart() : (/([^\s(]+)\s*$/.exec(before.replace(CMP_BEFORE, '')) ?? [])[1] ?? '';
       if (/^_[\w$]*(?![\w$.(\[])/.test(other) || /(?:^|[^\w$.])_[\w$]+$/.test(other)) return;
+      // 与数值比较（数字、方法的返回值如 $hypnoXP.level()、.length）：参数此时是数字，不影响字符串取值
+      if (/^-?\d/.test(other) || /\)$/.test(other) || /\.length$/.test(other) || /^[\w$.]*\(/.test(other)) return;
       return this.add(u, 'compare', code);
     }
     if (KEY_CALL.test(before)) return this.add(u, 'key', code);

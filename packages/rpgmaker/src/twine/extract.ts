@@ -49,6 +49,9 @@ const BLOCK_TAGS = new Set([
 /** 没有闭标签的 HTML 元素 */
 const VOID_TAGS = new Set(['br', 'img', 'hr', 'wbr', 'input', 'meta', 'link', 'source', 'area', 'col', 'embed', 'track']);
 
+/** 输出表达式的宏 */
+const PRINT_MACROS = new Set(['print', '=', '-']);
+
 /** 不显示为分支的容器宏 */
 const QUIET_CONTAINERS = new Set(['nobr', 'silently', 'capture', 'type', 'do', 'linkify', 'emph', 'script']);
 /** 同一容器内的分段宏 → 所属容器 */
@@ -111,6 +114,7 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
     });
   };
   const ui = SYSTEM_PASSAGES.has(p.name);
+  const widget = p.tags.includes('widget');
   const textCategory: EntryCategory = ui ? 'ui' : 'passage';
 
   // 脚本段落（twee 中带 script 标签）：只提取字符串
@@ -259,6 +263,53 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
     });
   };
 
+  /**
+   * <<print>> / <<=>> / <<->> 中的字符串：直接输出到页面、位于 HTML 标签之外且含文字的（如 "<div>" + x + " skill check passed</div>"）
+   * 作为可见词条（宏定义中为界面文字）；标签内的属性、函数参数、下标、比较值仍按脚本字符串处理（默认隐藏）
+   */
+  const emitPrint = (from: number, to: number) => {
+    const code = text.slice(from, to);
+    let inTag = false;
+    const literals = findJsStrings(code);
+    // 拼接 Twine 代码的表达式（"<<do \"" + x + "\" CHOICE:…>>"）：整段按脚本处理
+    const isBroken = (value: string) => {
+      const toks = lexSugarCube(value);
+      const count = (re: RegExp) => (value.match(re) ?? []).length;
+      const macros = toks.filter((t) => t.t === 'macro' || t.t === 'raw').length;
+      const links = toks.filter((t) => t.t === 'link' || t.t === 'image').length;
+      return count(/<</g) !== macros || count(/>>/g) !== macros || count(/\[\[|\[[<>]?img\[/gi) !== links || count(/\]\]/g) !== links;
+    };
+    const codeBuilding = literals.some((lit) => isBroken(unescapeMacroString(lit.content)));
+    for (const lit of literals) {
+      const start = from + lit.start;
+      const end = from + lit.end;
+      const before = code.slice(Math.max(0, lit.start - 40), lit.start - 1);
+      const after = code.slice(lit.end + 1, lit.end + 40);
+      const value = unescapeMacroString(lit.content);
+      // 按输出顺序跟踪是否处在 HTML 标签内，取出标签外的文字；从标签中间开始的片段（"' >email</a>"）译者难以保留，按脚本处理
+      const startsInTag = inTag;
+      let visible = '';
+      for (let k = 0; k < value.length; k++) {
+        const ch = value[k];
+        if (!inTag && ch === '<' && /[A-Za-z/!]/.test(value[k + 1] ?? '')) inTag = true;
+        else if (inTag && ch === '>') inTag = false;
+        else if (!inTag) visible += ch;
+      }
+      const asArgument = /[([,]\s*$/.test(before) && !/\+\s*$/.test(before);
+      const compared = /(?:===?|!==?|\bis\b|\bisnot\b|\beq\b|\bneq\b)\s*$/.test(before) || /^\s*(?:===?|!==?|\bis\b|\bisnot\b|\beq\b|\bneq\b)/.test(after);
+      const method = /^\s*\.(?!sayOne\b|sayIt\b)[\w$]+\(/.test(after);
+      if (!lit.content.trim() || !HAS_WORD.test(lit.content)) continue;
+      const words = stripMarkup(visible).replace(/[^\p{L}\p{N}]/gu, '');
+      // 拼接 Twine 代码的片段（"<<do \"…" 、"[img[" + x + "]]"）：标记不完整，按脚本处理
+      const broken = codeBuilding;
+      if (asArgument || compared || method || startsInTag || broken || words.length < 2) {
+        emit(start, end, lit.content, { k: 'ctx.tw.script', p: { n: lineOf(start) } }, 'script', true, (v) => escapeJsString(v, lit.quote));
+        continue;
+      }
+      emit(start, end, value, { k: 'ctx.tw.print', p: { n: lineOf(start) } }, widget || ui ? 'ui' : textCategory, false, (v) => escapeMacroString(v, lit.quote));
+    }
+  };
+
   const emitScript = (from: number, to: number) =>
     emitJsStrings(text, from, to, (s, e, o, line, quote) => emit(s, e, o, { k: 'ctx.tw.script', p: { n: line } }, 'script', true, (v) => escapeJsString(v, quote)), lineOf);
 
@@ -301,7 +352,7 @@ export function extractPassage(p: PassageSource, opts: PassageOptions, out: Pass
         const container = isContainer(tok.name);
         if (rule || scriptLike || container) flush();
         if (rule) emitRuleArgs(tok, rule);
-        else if (scriptLike) emitScript(tok.argsStart, tok.argsEnd);
+        else if (scriptLike) (PRINT_MACROS.has(tok.name) ? emitPrint(tok.argsStart, tok.argsEnd) : emitScript(tok.argsStart, tok.argsEnd));
         if (container) {
           const args = truncate(text.slice(tok.argsStart, tok.argsEnd).trim());
           stack.push({ group: tok.name, head: args, step: { k: 'macro', name: tok.name, args }, quiet: QUIET_CONTAINERS.has(tok.name) });

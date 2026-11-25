@@ -448,3 +448,48 @@ describe('带前缀的选项文字', () => {
   });
 });
 
+describe('数值比较与 <<print>> 输出的文字', () => {
+  it('参数与数值比较（$hypnoXP.level() >= _required）不算逻辑值', () => {
+    const story = storyHtml([
+      {
+        name: 'Start',
+        text: '<<mindread "A faint voice." 2>><<mindread 3 "Is this what love is like? Maybe.">><<mindread 4 "Hello there, stranger.">><<mindread "So quiet here.">>',
+      },
+      {
+        name: 'W',
+        tags: 'widget',
+        text: '<<widget "mindread">><<set _required = $args[1]?$args[1]:2>><<set _thought = $args[0]>><<if typeof _required == "string">><<set _thought = _required>><<set _required = 2>><</if>><<if $hypnoXP.level() >= _required>><span>_thought</span><</if>><</widget>>',
+      },
+    ]);
+    const m = analyzeTwineMacros([{ path: 'index.html', bytes: story }]).find((x) => x.name === 'mindread')!;
+    expect(m.args.find((a) => a.i === 1)).toMatchObject({ verdict: 'display', recommend: true });
+    expect(m.suggested).toMatchObject({ args: [0, 1] });
+  });
+
+  it('输出到页面、位于标签外的字符串为可见词条；属性、函数参数、拼接代码的片段仍为隐藏的脚本字符串', () => {
+    const story = storyHtml([
+      {
+        name: 'W',
+        tags: 'widget',
+        text: [
+          '<<widget "pass">><<= "<div class=\'test pass " + _args[0] + "_bg\'><div class=\'pop\'>" + _args[0] + " skill check passed</div></div>" >><</widget>>',
+          '<<widget "mood">><<= $happy ? "She smiles at you." : setup.getText("sad mood")>><</widget>>',
+          '<<widget "gen">><<= "<<do \\"Dose " + _x + " food.\\" CHOICE:DOSE>>">><</widget>>',
+        ].join('\n'),
+      },
+      { name: 'Start', text: '<<print "You feel|You sense".sayOne() + " a chill.">>' },
+    ]);
+    const { entries } = extractEntries('index.html', story, 'TWINE');
+    const of = (o: string) => entries.find((e) => e.original === o);
+    expect(of(' skill check passed</div></div>')).toMatchObject({ category: 'ui', danger: false, context: [expect.anything(), { k: 'ctx.tw.print', p: { n: 1 } }] });
+    expect(of("<div class='test pass ")).toMatchObject({ category: 'script', danger: true });
+    expect(of('She smiles at you.')).toMatchObject({ category: 'ui', danger: false });
+    expect(of('sad mood')).toMatchObject({ category: 'script', danger: true });
+    expect(of('You feel|You sense')).toMatchObject({ category: 'passage', danger: false });
+    expect(of(' a chill.')).toMatchObject({ category: 'passage', danger: false });
+    expect(entries.filter((e) => e.original.includes('Dose')).every((e) => e.danger)).toBe(true);
+    const html = dec.decode(applyTranslations('index.html', story, 'TWINE', new Map([[of('She smiles at you.')!.key, '她对你"微笑"。']])).data);
+    expect(html).toContain(esc('"她对你\\"微笑\\"。"'));
+  });
+});
+

@@ -275,6 +275,7 @@ export const zhCN = {
   'ctx.tw.arg': '<<{macro}>> 参数 {i} · 第{n}行',
   'ctx.tw.prefixed': '<<{macro}>> 参数 {i}「{prefix}」 · 第{n}行',
   'ctx.tw.say': '<<{macro}>> 说话人 {speaker} · 第{n}行',
+  'ctx.tw.print': '输出的文字 · 第{n}行',
   'ctx.tw.script': '脚本字符串 · 第{n}行',
   'ctx.tw.storyScript': 'Story JavaScript · 第{n}行',
 

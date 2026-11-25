@@ -132,6 +132,12 @@ test('编辑器高亮宏、显示说话人，漏掉宏时提示', async ({ page 
   const e = await owner.api.findEntry(pid, 'Welcome, <<print $name>>. The night is cold.');
   await openEditor(page, pid, `entry=${e.id}`);
   await expect(page.locator('.hl-code').filter({ hasText: '<<print $name>>' }).first()).toBeVisible();
+  // 分类：Twine 自己的分类，筛选中只列出这些
+  await expect(page.locator('.entry-panel')).toContainText('正文');
+  await page.locator('.ant-select').filter({ hasText: '全部分类' }).click();
+  const options = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option');
+  await expect(options).toHaveText(['正文', '对话', '链接文字', '选项', '说话人', '界面文字', '脚本', '其他']);
+  await page.keyboard.press('Escape');
   await page.locator('.translation-input').fill('欢迎。夜里很冷。');
   await expect(page.getByText('译文缺少控制符：<<print $name>>')).toBeVisible();
   await page.locator('.translation-input').fill('欢迎，<<print $name>>。夜里很冷。');

@@ -3,7 +3,8 @@
  * 内置一份 SugarCube 2 的默认规则；作者自定义的 widget（如 <<say 角色 "台词">>）在项目设置中补充。
  */
 
-export const TWINE_RULE_CATEGORIES = ['dialogue', 'choice', 'system'] as const;
+/** 宏规则可选的词条分类；不填为自动：有说话人参数时为「对话」，否则为「正文」 */
+export const TWINE_RULE_CATEGORIES = ['passage', 'dialogue', 'choice', 'ui'] as const;
 export type TwineRuleCategory = (typeof TWINE_RULE_CATEGORIES)[number];
 
 export interface TwineMacroRule {
@@ -13,7 +14,7 @@ export interface TwineMacroRule {
   args: number[] | 'all';
   /** 作为说话人显示的参数下标（可选） */
   speaker?: number;
-  /** 词条分类，默认 dialogue */
+  /** 词条分类；不填为自动（有说话人时为 dialogue，否则为 passage） */
   category?: TwineRuleCategory;
   /**
    * 文字参数中的分隔符（如 "|"、"///"）：宏定义会按它拆成多句，
@@ -129,7 +130,8 @@ export const TWINE_BUILTIN_MACROS = new Set([
 /** 实际生效的规则：内置规则 + 项目规则（同名覆盖） */
 export function effectiveTwineRules(config?: TwineConfig | null): Map<string, TwineMacroRule> {
   const rules = new Map(DEFAULT_TWINE_MACROS.map((r) => [r.name, r]));
-  for (const r of config?.macros ?? []) rules.set(r.name, r);
+  // 旧版本保存的 system 分类按 ui 处理
+  for (const r of config?.macros ?? []) rules.set(r.name, (r.category as string) === 'system' ? { ...r, category: 'ui' } : r);
   return rules;
 }
 
@@ -151,7 +153,9 @@ export function normalizeTwineConfig(input: unknown): { ok: true; value: TwineCo
     else if (Array.isArray(r!.args) && r!.args.every(isIndex)) args = [...new Set(r!.args as number[])].sort((a, b) => a - b);
     else return { ok: false, error: 'validation.twineRules' };
     if (r!.speaker !== undefined && r!.speaker !== null && !isIndex(r!.speaker)) return { ok: false, error: 'validation.twineRules' };
-    if (r!.category !== undefined && !TWINE_RULE_CATEGORIES.includes(r!.category)) return { ok: false, error: 'validation.twineRules' };
+    // 旧版本的 system 分类改名为 ui
+    const category = (r!.category as string) === 'system' ? 'ui' : r!.category;
+    if (category !== undefined && category !== null && !TWINE_RULE_CATEGORIES.includes(category)) return { ok: false, error: 'validation.twineRules' };
     let split: string[] | undefined;
     if (r!.split !== undefined && r!.split !== null) {
       if (!Array.isArray(r!.split) || r!.split.length > 8 || !r!.split.every((x) => typeof x === 'string' && x.length > 0 && x.length <= 8)) {
@@ -163,7 +167,7 @@ export function normalizeTwineConfig(input: unknown): { ok: true; value: TwineCo
       name,
       args,
       ...(isIndex(r!.speaker) ? { speaker: r!.speaker as number } : {}),
-      ...(r!.category && r!.category !== 'dialogue' ? { category: r!.category } : {}),
+      ...(category ? { category } : {}),
       ...(split?.length ? { split } : {}),
     });
   }

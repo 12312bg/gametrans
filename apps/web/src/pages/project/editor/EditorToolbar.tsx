@@ -1,10 +1,11 @@
 import { ClearOutlined, DownOutlined, FileSearchOutlined, LayoutOutlined, PicCenterOutlined, QuestionCircleOutlined, ReloadOutlined, SelectOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Dropdown, Input, Popover, Segmented, Select, Space, Tooltip, Typography } from 'antd';
-import { BatchAction, ENTRY_CATEGORIES, STAGES } from '@gametrans/shared';
+import { BatchAction, STAGES, categoriesFor } from '@gametrans/shared';
 import { useEffect, useState } from 'react';
 import type { FileItem } from '../../../api/types';
 import { StageDot } from '../../../components/Tags';
 import { useT } from '../../../i18n';
+import { useProject } from '../../../api/project';
 import { progressOf } from '../../../utils';
 import { SHORTCUTS } from './useShortcuts';
 
@@ -43,6 +44,8 @@ export type EditorLayout = 'two' | 'three';
 
 export function EditorToolbar({ filter, setParam, files, canFill, onFill, onReplace, canBatch, batchMode, onToggleBatch, onRefresh, layout, onLayout, canThree }: ToolbarProps) {
   const t = useT();
+  // 只列出本项目引擎的分类
+  const { project } = useProject();
   const [search, setSearch] = useState(filter.q);
   useEffect(() => setSearch(filter.q), [filter.q]);
 
@@ -98,7 +101,7 @@ export function EditorToolbar({ filter, setParam, files, canFill, onFill, onRepl
           allowClear
           value={split(filter.category)}
           onChange={(v: string[]) => setParam({ category: v.join(',') })}
-          options={ENTRY_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))}
+          options={categoriesFor(project.engine).map((c) => ({ value: c, label: t(`category.${c}`) }))}
         />
         <Space.Compact>
           <Select

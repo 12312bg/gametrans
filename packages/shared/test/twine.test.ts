@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ENTRY_CATEGORIES,
+  categoriesFor,
   checkMarkup,
   controlCodeSpans,
   escapeMacroString,
@@ -102,12 +104,25 @@ describe('Twine 路径与规则', () => {
   it('校验宏规则', () => {
     expect(normalizeTwineConfig({ macros: [{ name: 'say', args: [2, 1, 1], speaker: 0, category: 'dialogue' }] })).toEqual({
       ok: true,
-      value: { macros: [{ name: 'say', args: [1, 2], speaker: 0 }] },
+      value: { macros: [{ name: 'say', args: [1, 2], speaker: 0, category: 'dialogue' }] },
     });
+    // 旧版本的 system 分类改名为 ui
+    expect(normalizeTwineConfig({ macros: [{ name: 'menu', args: [0], category: 'system' }] })).toEqual({ ok: true, value: { macros: [{ name: 'menu', args: [0], category: 'ui' }] } });
+    expect(normalizeTwineConfig({ macros: [{ name: 'menu', args: [0], category: 'note' }] }).ok).toBe(false);
     expect(normalizeTwineConfig({ macros: [{ name: 'but', args: 'all', category: 'choice' }] }).ok).toBe(true);
     expect(normalizeTwineConfig({ macros: [{ name: 'bad name', args: [0] }] }).ok).toBe(false);
     expect(normalizeTwineConfig({ macros: [{ name: 'a', args: [-1] }] }).ok).toBe(false);
     expect(normalizeTwineConfig({ macros: [{ name: 'a', args: [0] }, { name: 'a', args: [1] }] }).ok).toBe(false);
     expect(normalizeTwineConfig(null).ok).toBe(false);
+  });
+});
+
+describe('按引擎区分词条分类', () => {
+  it('Twine 与 RPG Maker 各有自己的分类，全部分类为并集', () => {
+    expect(categoriesFor('TWINE')).toEqual(['passage', 'dialogue', 'link', 'choice', 'speaker', 'ui', 'script', 'other']);
+    expect(categoriesFor('RMMZ')).toContain('note');
+    expect(categoriesFor('RMMZ')).not.toContain('passage');
+    expect(categoriesFor('TWINE')).not.toContain('note');
+    for (const c of [...categoriesFor('TWINE'), ...categoriesFor('RMXP')]) expect(ENTRY_CATEGORIES).toContain(c);
   });
 });

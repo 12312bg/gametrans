@@ -62,10 +62,12 @@ describe('Twine（SugarCube）提取', () => {
     expect(kind).toBe('story');
     const originals = entries.map((e) => e.original);
     expect(originals).toContain('You enter the chapel.');
+    expect(byOriginal(entries, 'You enter the chapel.')?.category).toBe('passage');
+    expect(byOriginal(entries, 'Ring the bell')?.category).toBe('choice');
     // 行内的宏与变量保留在词条中
     expect(originals).toContain('Hello, <<print $name>>! You have $gold coins.');
     // 单独一行的链接只提取显示文字
-    expect(byOriginal(entries, 'Go to the hall')?.category).toBe('choice');
+    expect(byOriginal(entries, 'Go to the hall')?.category).toBe('link');
     expect(byOriginal(entries, 'Library')?.context[1]).toEqual({ k: 'ctx.tw.link', p: { target: 'Library', n: 4 } });
     // 句中的 [[目标]] 规范为 [[文字|目标]]
     expect(originals).toContain('Walk to the [[garden|Garden]] or stay.');
@@ -84,7 +86,7 @@ describe('Twine（SugarCube）提取', () => {
     expect(originals.some((o) => o.includes('color'))).toBe(false);
   });
 
-  it('脚本字符串默认隐藏，特殊段落归为系统', () => {
+  it('脚本字符串默认隐藏，特殊段落归为界面文字', () => {
     const { entries } = extractEntries('index.html', STORY, 'TWINE', CONFIG);
     const title = byOriginal(entries, 'Sister Agnes');
     expect(title).toMatchObject({ category: 'script', danger: true });
@@ -92,8 +94,8 @@ describe('Twine（SugarCube）提取', () => {
     const greeting = byOriginal(entries, 'Welcome back');
     expect(greeting).toMatchObject({ key: 'script/0', category: 'script', danger: true });
     expect(greeting?.context).toEqual([{ k: 'ctx.tw.storyScript', p: { n: 2 } }]);
-    expect(byOriginal(entries, 'Day $day')?.category).toBe('system');
-    expect(byOriginal(entries, 'Journal')?.category).toBe('choice');
+    expect(byOriginal(entries, 'Day $day')?.category).toBe('ui');
+    expect(byOriginal(entries, 'Journal')?.category).toBe('ui');
     // 页面上的引擎脚本不属于故事，不提取
     expect(entries.some((e) => e.original.includes('not a macro'))).toBe(false);
   });
@@ -105,6 +107,13 @@ describe('Twine（SugarCube）提取', () => {
     expect(byOriginal(entries, '<b>Blessed</b> are you.')?.branch).toEqual([{ k: 'macro', name: 'if', args: '$faith > 2' }]);
     expect(byOriginal(entries, 'You enter the chapel.')?.branch).toBeUndefined();
     expect(byOriginal(entries, 'A long & dark hall.')?.context[0]).toEqual({ k: 'ctx.tw.passageTags', p: { name: 'Hall', tags: 'room' } });
+  });
+
+  it('宏规则未指定分类时：有说话人为对话，否则为正文；可指定为选项', () => {
+    const cat = (config: ParserConfig) => byOriginal(extractEntries('index.html', STORY, 'TWINE', config).entries, 'I\'d like to "help" you.')?.category;
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1], speaker: 0 }] } })).toBe('dialogue');
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1] }] } })).toBe('passage');
+    expect(cat({ twine: { macros: [{ name: 'say', args: [1], category: 'choice' }] } })).toBe('choice');
   });
 
   it('没有规则时自定义宏不提取', () => {

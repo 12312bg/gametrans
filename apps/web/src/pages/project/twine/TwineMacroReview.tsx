@@ -15,7 +15,8 @@ export interface Decision {
   choices: Record<number, Choice>;
   /** 按检测到的分隔符拆成多条词条 */
   split: boolean;
-  category: TwineRuleCategory;
+  /** auto：有说话人时为对话，否则为正文 */
+  category: TwineRuleCategory | 'auto';
 }
 
 const VERDICT_COLOR: Record<TwineArgVerdict, string> = { display: 'green', logic: 'red', stored: 'orange', unknown: 'default' };
@@ -28,7 +29,7 @@ export function initialDecision(m: AnalyzedMacro, saved: TwineMacroRule | undefi
     const on = rule && (rule.args === 'all' ? a.strings > 0 : rule.args.includes(a.i));
     choices[a.i] = rule?.speaker === a.i ? 'speaker' : on ? 'translate' : 'skip';
   }
-  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: saved?.category ?? 'dialogue' };
+  return { choices, split: saved ? !!saved.split?.length : !!m.suggested?.split?.length, category: saved?.category ?? 'auto' };
 }
 
 /** 选择 → 规则；没有要翻译的参数时返回 null（记为「不翻译」） */
@@ -44,7 +45,7 @@ export function ruleOf(m: AnalyzedMacro, d: Decision): TwineMacroRule | null {
     name: m.name,
     args,
     ...(sp ? { speaker: Number(sp[0]) } : {}),
-    ...(d.category !== 'dialogue' ? { category: d.category } : {}),
+    ...(d.category !== 'auto' ? { category: d.category } : {}),
     ...(split.length ? { split } : {}),
   };
 }
@@ -291,10 +292,10 @@ export function TwineMacroReview({ pid }: { pid: string }) {
                       <span className="muted small">{t('twine.category')}</span>
                       <Select
                         size="small"
-                        style={{ width: 110 }}
+                        style={{ width: 150 }}
                         value={d.category}
                         onChange={(v) => update(m.name, { category: v })}
-                        options={TWINE_RULE_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))}
+                        options={[{ value: 'auto' as const, label: t('twine.categoryAuto') }, ...TWINE_RULE_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))]}
                       />
                     </Space>
                     {per?.samples.length ? (

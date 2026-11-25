@@ -16,7 +16,7 @@ interface Row {
   name: string;
   args: string;
   speaker: number | null;
-  category: TwineRuleCategory;
+  category: TwineRuleCategory | 'auto';
   /** 分隔符：手动编辑中不显示，原样保留 */
   split?: string[];
 }
@@ -27,7 +27,7 @@ const toRow = (r: TwineMacroRule): Row => ({
   name: r.name,
   args: r.args === 'all' ? 'all' : r.args.join(', '),
   speaker: r.speaker ?? null,
-  category: r.category ?? 'dialogue',
+  category: r.category ?? 'auto',
   ...(r.split?.length ? { split: r.split } : {}),
 });
 
@@ -48,7 +48,7 @@ const toRule = (r: Row): TwineMacroRule | null => {
     name: r.name.trim(),
     args,
     ...(r.speaker !== null ? { speaker: r.speaker } : {}),
-    ...(r.category !== 'dialogue' ? { category: r.category } : {}),
+    ...(r.category !== 'auto' ? { category: r.category } : {}),
     ...(r.split?.length ? { split: r.split } : {}),
   };
 };
@@ -124,7 +124,7 @@ export function TwineRulesCard({ pid }: { pid: string }) {
     }
   };
 
-  const categoryOptions = TWINE_RULE_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }));
+  const categoryOptions = [{ value: 'auto' as const, label: t('twine.categoryAuto') }, ...TWINE_RULE_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))];
 
   const manual = (
     <div>
@@ -192,7 +192,7 @@ export function TwineRulesCard({ pid }: { pid: string }) {
           {
             title: t('twine.category'),
             width: 130,
-            render: (_, r) => <Select size="small" style={{ width: 110 }} value={r.category} options={categoryOptions} onChange={(v) => update(r.id, { category: v })} />,
+            render: (_, r) => <Select size="small" style={{ width: 150 }} value={r.category} options={categoryOptions} onChange={(v) => update(r.id, { category: v })} />,
           },
           {
             width: 48,

@@ -24,7 +24,12 @@ interface Loaded {
 /** 每个宏在确认界面中的状态：已有规则、已标记不翻译、待确认 */
 export type MacroStatus = 'configured' | 'ignored' | 'new';
 
-const configOf = (project: Project): TwineConfig => (project.parserConfig as ParserConfig | null)?.twine ?? { macros: [] };
+/** 项目保存的规则（按当前格式规范化，如旧版本的 system 分类改为 ui） */
+const configOf = (project: Project): TwineConfig => {
+  const raw = (project.parserConfig as ParserConfig | null)?.twine ?? { macros: [] };
+  const r = normalizeTwineConfig(raw);
+  return r.ok ? r.value : raw;
+};
 
 @Injectable()
 export class TwineService {

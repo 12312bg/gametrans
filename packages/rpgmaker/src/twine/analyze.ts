@@ -33,8 +33,16 @@ const isProse = (s: string) => {
   const words = v.split(/\s+/);
   // 句末标点之外的符号视为代码（选项、样式、条件表达式等）
   if (words.some((w) => CODEISH.test(w.replace(/^["'(“‘]+|[.,!?…:;"')”’]+$/g, '')))) return false;
-  return /^["'“‘(]?\p{Lu}/u.test(v) || /[.!?…]["'”’)]?$/.test(v);
+  if (/^["'“‘(]?\p{Lu}/u.test(v) || /[.!?…]["'”’)]?$/.test(v)) return true;
+  // 小写开头、没有句末标点的短语（如链接文字「a sister of many」）：含常见虚词或至少四个词才算，
+  // 避免把「center special」这类样式参数当成文字
+  return words.length >= 4 || (words.length >= 2 && words.some((w) => STOPWORDS.has(w.toLowerCase().replace(/[^a-z']/g, ''))));
 };
+
+/** 英语常见虚词 / 代词：样式、选项参数中很少出现 */
+const STOPWORDS = new Set(
+  'a an the of to in on at by for from with into onto about over under and or but not no is are was were be been am do does did have has had i me my mine you your yours he him his she her hers it its we us our they them their this that these those who what where when why how some any all one'.split(' '),
+);
 
 interface ArgAcc {
   strings: number;
